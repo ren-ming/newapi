@@ -87,7 +87,7 @@ services:
     networks:
       - new-api-network
     ports:
-      - "3306:3306"  # Uncomment if you need to access MySQL from outside Docker
+      - "3308:3306"  # Uncomment if you need to access MySQL from outside Docker
 
 volumes:
 #  pg_data:
