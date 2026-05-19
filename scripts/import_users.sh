@@ -48,6 +48,7 @@ while IFS=',' read -r name phone department; do
         -H "Authorization: Bearer ${TOKEN}" \
         -H "New-Api-User: ${ADMIN_USER_ID}" | \
         grep -o '"id":[[:space:]]*[0-9]*' | head -1 | grep -o '[0-9]*')
+    sleep 1
 
     if [ -n "$user_id" ]; then
         # 用户已存在，直接更新分组
@@ -62,6 +63,7 @@ while IFS=',' read -r name phone department; do
                 \"display_name\": \"${name}\",
                 \"group\": \"${department}\"
             }")
+        sleep 1
 
         update_success=$(echo "$update_resp" | grep -o '"success":[[:space:]]*true')
         if [ -z "$update_success" ]; then
@@ -71,7 +73,6 @@ while IFS=',' read -r name phone department; do
         fi
         echo "成功"
         SUCCESS=$((SUCCESS + 1))
-        sleep 1
         continue
     fi
 
@@ -85,6 +86,7 @@ while IFS=',' read -r name phone department; do
             \"password\": \"${password}\",
             \"display_name\": \"${name}\"
         }")
+    sleep 1
 
     create_success=$(echo "$create_resp" | grep -o '"success":[[:space:]]*true')
     if [ -z "$create_success" ]; then
@@ -99,6 +101,7 @@ while IFS=',' read -r name phone department; do
         -H "Authorization: Bearer ${TOKEN}" \
         -H "New-Api-User: ${ADMIN_USER_ID}" | \
         grep -o '"id":[[:space:]]*[0-9]*' | head -1 | grep -o '[0-9]*')
+    sleep 1
 
     if [ -z "$user_id" ]; then
         echo "失败 (未找到用户ID)"
@@ -117,6 +120,7 @@ while IFS=',' read -r name phone department; do
             \"display_name\": \"${name}\",
             \"group\": \"${department}\"
         }")
+    sleep 1
 
     update_success=$(echo "$update_resp" | grep -o '"success":[[:space:]]*true')
     if [ -z "$update_success" ]; then
@@ -126,9 +130,7 @@ while IFS=',' read -r name phone department; do
     fi
 
     echo "成功 (新建)"
-    SUCCESS=$((SUCCESS + 1))
-
-    sleep 1
+    SUCCESS=$((SUCCESS + 1)
 
 done < "$USER_FILE"
 
