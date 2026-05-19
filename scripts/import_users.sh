@@ -130,7 +130,7 @@ while IFS=',' read -r name phone department; do
     fi
 
     echo "成功 (新建)"
-    SUCCESS=$((SUCCESS + 1)
+    SUCCESS=$((SUCCESS + 1))
 
 done < "$USER_FILE"
 
