@@ -71,6 +71,7 @@ while IFS=',' read -r name phone department; do
         fi
         echo "成功"
         SUCCESS=$((SUCCESS + 1))
+        sleep 0.5
         continue
     fi
 
@@ -126,6 +127,8 @@ while IFS=',' read -r name phone department; do
 
     echo "成功 (新建)"
     SUCCESS=$((SUCCESS + 1))
+
+    sleep 0.5
 
 done < "$USER_FILE"
 
