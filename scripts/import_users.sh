@@ -28,25 +28,53 @@ fi
 
 SUCCESS=0
 FAIL=0
+SKIP=0
 TOTAL=0
 
 while IFS=',' read -r name phone department; do
-    # 去掉首尾空格
     name=$(echo "$name" | xargs)
     phone=$(echo "$phone" | xargs)
     department=$(echo "$department" | xargs)
 
-    # 跳过空行
     [ -z "$name" ] && continue
 
     TOTAL=$((TOTAL + 1))
-
-    # 密码: wattman + 手机号后四位
     password="wattman${phone: -4}"
 
-    echo -n "[$TOTAL] 创建用户: $name ($phone) -> $department ... "
+    echo -n "[$TOTAL] $name ($phone) -> $department ... "
 
-    # Step 1: 创建用户
+    # Step 1: 查询用户是否已存在
+    user_id=$(curl -s "${BASE_URL}/api/user/search?keyword=${phone}" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "New-Api-User: ${ADMIN_USER_ID}" | \
+        grep -o '"id":[[:space:]]*[0-9]*' | head -1 | grep -o '[0-9]*')
+
+    if [ -n "$user_id" ]; then
+        # 用户已存在，直接更新分组
+        echo -n "(已存在，更新分组) "
+        update_resp=$(curl -s -X PUT "${BASE_URL}/api/user/" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "New-Api-User: ${ADMIN_USER_ID}" \
+            -H "Content-Type: application/json" \
+            -d "{
+                \"id\": ${user_id},
+                \"username\": \"${phone}\",
+                \"display_name\": \"${name}\",
+                \"group\": \"${department}\"
+            }")
+
+        update_success=$(echo "$update_resp" | grep -o '"success":[[:space:]]*true')
+        if [ -z "$update_success" ]; then
+            echo "失败 (更新分组)"
+            FAIL=$((FAIL + 1))
+            continue
+        fi
+        echo "成功"
+        SUCCESS=$((SUCCESS + 1))
+        continue
+    fi
+
+    # Step 2: 用户不存在，创建用户
     create_resp=$(curl -s -X POST "${BASE_URL}/api/user/" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "New-Api-User: ${ADMIN_USER_ID}" \
@@ -57,16 +85,15 @@ while IFS=',' read -r name phone department; do
             \"display_name\": \"${name}\"
         }")
 
-    success=$(echo "$create_resp" | grep -o '"success":[[:space:]]*true')
-
-    if [ -z "$success" ]; then
+    create_success=$(echo "$create_resp" | grep -o '"success":[[:space:]]*true')
+    if [ -z "$create_success" ]; then
         msg=$(echo "$create_resp" | grep -o '"message":"[^"]*"' | head -1)
         echo "失败 (创建) $msg"
         FAIL=$((FAIL + 1))
         continue
     fi
 
-    # Step 2: 获取用户 ID（通过用户名查询）
+    # Step 3: 获取新创建用户的 ID
     user_id=$(curl -s "${BASE_URL}/api/user/search?keyword=${phone}" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "New-Api-User: ${ADMIN_USER_ID}" | \
@@ -78,25 +105,26 @@ while IFS=',' read -r name phone department; do
         continue
     fi
 
-    # Step 3: 更新分组
+    # Step 4: 更新分组
     update_resp=$(curl -s -X PUT "${BASE_URL}/api/user/" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "New-Api-User: ${ADMIN_USER_ID}" \
         -H "Content-Type: application/json" \
         -d "{
             \"id\": ${user_id},
+            \"username\": \"${phone}\",
+            \"display_name\": \"${name}\",
             \"group\": \"${department}\"
         }")
 
     update_success=$(echo "$update_resp" | grep -o '"success":[[:space:]]*true')
-
     if [ -z "$update_success" ]; then
         echo "失败 (更新分组)"
         FAIL=$((FAIL + 1))
         continue
     fi
 
-    echo "成功"
+    echo "成功 (新建)"
     SUCCESS=$((SUCCESS + 1))
 
 done < "$USER_FILE"
