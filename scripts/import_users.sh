@@ -4,19 +4,20 @@
 #
 # 使用方法：
 #   1. 启动服务后，登录管理员账号，在设置中生成一个 Access Token
-#   2. 执行：bash scripts/import_users.sh <base_url> <admin_token>
-#   例如：bash scripts/import_users.sh http://localhost:3005 sk-xxx
+#   2. 执行：bash scripts/import_users.sh <base_url> <admin_token> <admin_user_id>
+#   例如：bash scripts/import_users.sh http://localhost:3005 sk-xxx 1
 #
 # 用户信息文件格式（每行）：姓名,手机号,部门
 #   例如：龚建波,13270217941,机器人与无人化平台事业部
 
 BASE_URL="$1"
 TOKEN="$2"
+ADMIN_USER_ID="$3"
 USER_FILE="$(dirname "$0")/user_info.txt"
 
-if [ -z "$BASE_URL" ] || [ -z "$TOKEN" ]; then
-    echo "用法: $0 <base_url> <admin_token>"
-    echo "例如: $0 http://localhost:3005 sk-xxx"
+if [ -z "$BASE_URL" ] || [ -z "$TOKEN" ] || [ -z "$ADMIN_USER_ID" ]; then
+    echo "用法: $0 <base_url> <admin_token> <admin_user_id>"
+    echo "例如: $0 http://localhost:3005 sk-xxx 1"
     exit 1
 fi
 
@@ -48,6 +49,7 @@ while IFS=',' read -r name phone department; do
     # Step 1: 创建用户
     create_resp=$(curl -s -X POST "${BASE_URL}/api/user/" \
         -H "Authorization: Bearer ${TOKEN}" \
+        -H "New-Api-User: ${ADMIN_USER_ID}" \
         -H "Content-Type: application/json" \
         -d "{
             \"username\": \"${phone}\",
@@ -66,7 +68,8 @@ while IFS=',' read -r name phone department; do
 
     # Step 2: 获取用户 ID（通过用户名查询）
     user_id=$(curl -s "${BASE_URL}/api/user/search?keyword=${phone}" \
-        -H "Authorization: Bearer ${TOKEN}" | \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "New-Api-User: ${ADMIN_USER_ID}" | \
         grep -o '"id":[[:space:]]*[0-9]*' | head -1 | grep -o '[0-9]*')
 
     if [ -z "$user_id" ]; then
@@ -78,6 +81,7 @@ while IFS=',' read -r name phone department; do
     # Step 3: 更新分组
     update_resp=$(curl -s -X PUT "${BASE_URL}/api/user/" \
         -H "Authorization: Bearer ${TOKEN}" \
+        -H "New-Api-User: ${ADMIN_USER_ID}" \
         -H "Content-Type: application/json" \
         -d "{
             \"id\": ${user_id},
