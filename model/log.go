@@ -24,6 +24,7 @@ type Log struct {
 	Type              int    `json:"type" gorm:"index:idx_created_at_type"`
 	Content           string `json:"content"`
 	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
+	DisplayName       string `json:"display_name" gorm:"-"`
 	TokenName         string `json:"token_name" gorm:"index;default:''"`
 	ModelName         string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
 	Quota             int    `json:"quota" gorm:"default:0"`
@@ -379,6 +380,8 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		}
 	}
 
+	fillLogDisplayNames(logs)
+
 	return logs, total, err
 }
 
@@ -421,7 +424,38 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 
 	formatUserLogs(logs, startIdx)
+	fillLogDisplayNames(logs)
 	return logs, total, err
+}
+
+func fillLogDisplayNames(logs []*Log) {
+	if len(logs) == 0 {
+		return
+	}
+	userIds := types.NewSet[int]()
+	for _, log := range logs {
+		if log.UserId != 0 {
+			userIds.Add(log.UserId)
+		}
+	}
+	if userIds.Len() == 0 {
+		return
+	}
+	var rows []struct {
+		Id          int    `gorm:"column:id"`
+		DisplayName string `gorm:"column:display_name"`
+	}
+	if err := DB.Table("users").Select("id, display_name").Where("id IN ?", userIds.Items()).Find(&rows).Error; err != nil {
+		common.SysError("failed to fill log display names: " + err.Error())
+		return
+	}
+	displayNameMap := make(map[int]string, len(rows))
+	for _, row := range rows {
+		displayNameMap[row.Id] = row.DisplayName
+	}
+	for i := range logs {
+		logs[i].DisplayName = displayNameMap[logs[i].UserId]
+	}
 }
 
 type Stat struct {
