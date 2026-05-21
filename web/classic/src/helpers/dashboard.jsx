@@ -390,6 +390,14 @@ export const generateChartTimePoints = (
 
 // ========== 用户维度数据处理 ==========
 export const processUserData = (data, dataExportDefaultTime, limit = 10) => {
+  // Build a map from username -> display_name
+  const displayNameMap = new Map();
+  data.forEach((item) => {
+    if (item.display_name) {
+      displayNameMap.set(item.username, item.display_name);
+    }
+  });
+
   const userQuotaTotal = new Map();
   data.forEach((item) => {
     const prev = userQuotaTotal.get(item.username) || 0;
@@ -403,7 +411,7 @@ export const processUserData = (data, dataExportDefaultTime, limit = 10) => {
   const topUserSet = new Set(topUsers);
 
   const rankingData = sorted.slice(0, limit).map(([username, quota]) => ({
-    User: username,
+    User: displayNameMap.get(username) || username,
     Quota: quota,
   }));
 
@@ -432,9 +440,10 @@ export const processUserData = (data, dataExportDefaultTime, limit = 10) => {
     topUsers.forEach((user) => {
       const key = `${time}-${user}`;
       const val = timeUserMap.get(key);
+      const displayName = displayNameMap.get(user) || user;
       trendData.push({
         Time: time,
-        User: user,
+        User: displayName,
         Quota: val?.quota || 0,
       });
     });

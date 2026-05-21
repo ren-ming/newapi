@@ -609,6 +609,18 @@ export const getLogsColumns = ({
       },
     },
     {
+      key: COLUMN_KEYS.DISPLAY_NAME,
+      title: t('显示名称'),
+      dataIndex: 'display_name',
+      render: (text, record, index) => {
+        return isAdminUser ? (
+          <span>{text || '-'}</span>
+        ) : (
+          <></>
+        );
+      },
+    },
+    {
       key: COLUMN_KEYS.TOKEN,
       title: t('令牌'),
       dataIndex: 'token_name',
