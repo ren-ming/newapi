@@ -72,6 +72,7 @@ func formatUserLogs(logs []*Log, startIdx int) {
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	err = LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId).Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
+	fillLogDisplayNames(logs)
 	return logs, err
 }
 
