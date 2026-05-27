@@ -383,28 +383,20 @@ const EditTokenModal = (props) => {
                     />
                   </Col>
                   <Col span={24}>
-                    {groups.length > 0 ? (
-                      <Form.Select
-                        field='group'
-                        label={t('令牌分组')}
-                        placeholder={t('令牌分组，默认为用户的分组')}
-                        optionList={groups}
-                        renderOptionItem={renderGroupOption}
-                        filter
-                        showSearch
-                        autoClearSearchValue
-                        searchPosition='dropdown'
-                        showClear
-                        style={{ width: '100%' }}
-                      />
-                    ) : (
-                      <Form.Select
-                        placeholder={t('管理员未设置用户可选分组')}
-                        disabled
-                        label={t('令牌分组')}
-                        style={{ width: '100%' }}
-                      />
-                    )}
+                    <Form.Select
+                      field='group'
+                      label={t('令牌分组')}
+                      placeholder={groups.length === 0 ? t('管理员未设置用户可选分组') : t('令牌分组，默认为用户的分组')}
+                      optionList={groups}
+                      renderOptionItem={renderGroupOption}
+                      filter
+                      showSearch
+                      autoClearSearchValue
+                      searchPosition='dropdown'
+                      disabled={groups.length === 0}
+                      showClear
+                      style={{ width: '100%' }}
+                    />
                   </Col>
                   <Col
                     span={24}
