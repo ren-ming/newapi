@@ -392,9 +392,9 @@ const EditTokenModal = (props) => {
                       label={t('令牌分组')}
                       placeholder={groups.length === 0 ? t('管理员未设置用户可选分组') : t('令牌分组，默认为用户的分组')}
                       optionList={groups}
-                      renderSelectedItem={(optionNode) => ({
-                        content: optionNode?.value ?? '',
-                      })}
+                      renderSelectedItem={(optionNode) =>
+                        optionNode ? optionNode.value ?? '' : ''
+                      }
                       filter={(input, option) => {
                         const q = input.toLowerCase();
                         return option.value?.toLowerCase().includes(q);
