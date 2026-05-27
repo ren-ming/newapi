@@ -383,6 +383,103 @@ export const useDashboardCharts = (
     color: { type: 'ordinal', range: USER_COLORS },
   });
 
+  // ========== Admin: 用户 Token 消耗排行 ==========
+  const [spec_user_token_rank, setSpecUserTokenRank] = useState({
+    type: 'bar',
+    data: [{ id: 'userTokenRankData', values: [] }],
+    xField: 'rawToken',
+    yField: 'User',
+    seriesField: 'User',
+    direction: 'horizontal',
+    legends: { visible: false },
+    title: {
+      visible: true,
+      text: t('用户 Token 消耗排行'),
+      subtext: '',
+    },
+    bar: {
+      state: { hover: { stroke: '#000', lineWidth: 1 } },
+    },
+    label: {
+      visible: true,
+      position: 'outside',
+      formatMethod: (value, datum) => `${datum['rawToken'] || 0} tokens`,
+    },
+    axes: [{
+      orient: 'left',
+      type: 'band',
+      label: { visible: true },
+    }, {
+      orient: 'bottom',
+      type: 'linear',
+      visible: false,
+    }],
+    tooltip: {
+      mark: {
+        content: [{
+          key: (datum) => datum['User'],
+          value: (datum) => `${datum['rawToken'] || 0} tokens`,
+        }],
+      },
+    },
+    color: { type: 'ordinal', range: USER_COLORS },
+  });
+
+  // ========== Admin: 用户 Token 消耗趋势 ==========
+  const [spec_user_token_trend, setSpecUserTokenTrend] = useState({
+    type: 'area',
+    data: [{ id: 'userTokenTrendData', values: [] }],
+    xField: 'Time',
+    yField: 'rawToken',
+    seriesField: 'User',
+    stack: false,
+    legends: { visible: true, selectMode: 'single' },
+    title: {
+      visible: true,
+      text: t('用户 Token 消耗趋势'),
+      subtext: '',
+    },
+    axes: [{
+      orient: 'left',
+      label: {
+        formatMethod: (value) => `${value} tokens`,
+      },
+    }],
+    area: { style: { fillOpacity: 0.15 } },
+    line: { style: { lineWidth: 2 } },
+    point: { visible: false },
+    tooltip: {
+      mark: {
+        content: [{
+          key: (datum) => datum['User'],
+          value: (datum) => `${datum['rawToken'] || 0} tokens`,
+        }],
+      },
+      dimension: {
+        content: [{
+          key: (datum) => datum['User'],
+          value: (datum) => datum['rawToken'] || 0,
+        }],
+        updateContent: (array) => {
+          array.sort((a, b) => b.value - a.value);
+          let sum = 0;
+          for (let i = 0; i < array.length; i++) {
+            let value = parseFloat(array[i].value);
+            if (isNaN(value)) value = 0;
+            sum += value;
+            array[i].value = `${value} tokens`;
+          }
+          array.unshift({
+            key: t('总计'),
+            value: `${sum} tokens`,
+          });
+          return array;
+        },
+      },
+    },
+    color: { type: 'ordinal', range: USER_COLORS },
+  });
+
   // ========== 数据处理函数 ==========
   const generateModelColors = useCallback((uniqueModels, modelColors) => {
     const newModelColors = {};
@@ -565,12 +662,14 @@ export const useDashboardCharts = (
   // ========== 用户维度图表数据处理 ==========
   const updateUserChartData = useCallback(
     (data) => {
-      const { rankingData, trendData: userTrend } = processUserData(
-        data,
-        dataExportDefaultTime,
-        10,
-      );
+      const {
+        rankingData,
+        trendData: userTrend,
+        tokenRankingData,
+        tokenTrendData: userTokenTrend,
+      } = processUserData(data, dataExportDefaultTime, 10);
 
+      // 金额版排行
       const userRankValues = rankingData.map((item) => ({
         User: item.User,
         rawQuota: item.Quota,
@@ -588,6 +687,7 @@ export const useDashboardCharts = (
         },
       }));
 
+      // 金额版趋势
       const userTrendValues = userTrend.map((item) => ({
         Time: item.Time,
         User: item.User,
@@ -601,6 +701,41 @@ export const useDashboardCharts = (
         title: {
           ...prev.title,
           subtext: `${t('总计')}：${renderQuota(totalUserQuota, 2)}`,
+        },
+      }));
+
+      // Token版排行
+      const userTokenRankValues = tokenRankingData.map((item) => ({
+        User: item.User,
+        rawToken: item.Token,
+        Token: `${item.Token} tokens`,
+      })).sort((a, b) => b.rawToken - a.rawToken);
+
+      const totalUserToken = tokenRankingData.reduce((s, i) => s + i.Token, 0);
+
+      setSpecUserTokenRank((prev) => ({
+        ...prev,
+        data: [{ id: 'userTokenRankData', values: userTokenRankValues }],
+        title: {
+          ...prev.title,
+          subtext: `${t('总计')}：${totalUserToken} tokens`,
+        },
+      }));
+
+      // Token版趋势
+      const userTokenTrendValues = userTokenTrend.map((item) => ({
+        Time: item.Time,
+        User: item.User,
+        rawToken: item.Token,
+        Usage: `${item.Token} tokens`,
+      }));
+
+      setSpecUserTokenTrend((prev) => ({
+        ...prev,
+        data: [{ id: 'userTokenTrendData', values: userTokenTrendValues }],
+        title: {
+          ...prev.title,
+          subtext: `${t('总计')}：${totalUserToken} tokens`,
         },
       }));
     },
@@ -621,6 +756,8 @@ export const useDashboardCharts = (
     spec_rank_bar,
     spec_user_rank,
     spec_user_trend,
+    spec_user_token_rank,
+    spec_user_token_trend,
     updateChartData,
     updateUserChartData,
     generateModelColors,

@@ -399,9 +399,12 @@ export const processUserData = (data, dataExportDefaultTime, limit = 10) => {
   });
 
   const userQuotaTotal = new Map();
+  const userTokenTotal = new Map();
   data.forEach((item) => {
-    const prev = userQuotaTotal.get(item.username) || 0;
-    userQuotaTotal.set(item.username, prev + item.quota);
+    const prevQuota = userQuotaTotal.get(item.username) || 0;
+    userQuotaTotal.set(item.username, prevQuota + item.quota);
+    const prevToken = userTokenTotal.get(item.username) || 0;
+    userTokenTotal.set(item.username, prevToken + (item.token_used || 0));
   });
 
   const sorted = Array.from(userQuotaTotal.entries()).sort(
@@ -415,9 +418,15 @@ export const processUserData = (data, dataExportDefaultTime, limit = 10) => {
     Quota: quota,
   }));
 
+  const tokenRankingData = sorted.slice(0, limit).map(([username]) => ({
+    User: displayNameMap.get(username) || username,
+    Token: userTokenTotal.get(username) || 0,
+  }));
+
   const showYear = isDataCrossYear(data.map((item) => item.created_at));
 
   const timeUserMap = new Map();
+  const tokenTimeUserMap = new Map();
   const allTimePoints = new Set();
 
   data.forEach((item) => {
@@ -432,22 +441,31 @@ export const processUserData = (data, dataExportDefaultTime, limit = 10) => {
     const key = `${timeKey}-${user}`;
     const prev = timeUserMap.get(key) || { quota: 0 };
     timeUserMap.set(key, { quota: prev.quota + item.quota });
+    const prevToken = tokenTimeUserMap.get(key) || { token: 0 };
+    tokenTimeUserMap.set(key, { token: prevToken.token + (item.token_used || 0) });
   });
 
   const sortedTimePoints = Array.from(allTimePoints).sort();
   const trendData = [];
+  const tokenTrendData = [];
   sortedTimePoints.forEach((time) => {
     topUsers.forEach((user) => {
       const key = `${time}-${user}`;
       const val = timeUserMap.get(key);
+      const tokenVal = tokenTimeUserMap.get(key);
       const displayName = displayNameMap.get(user) || user;
       trendData.push({
         Time: time,
         User: displayName,
         Quota: val?.quota || 0,
       });
+      tokenTrendData.push({
+        Time: time,
+        User: displayName,
+        Token: tokenVal?.token || 0,
+      });
     });
   });
 
-  return { rankingData, trendData, topUsers };
+  return { rankingData, trendData, tokenRankingData, tokenTrendData, topUsers };
 };
