@@ -390,14 +390,10 @@ const EditTokenModal = (props) => {
                         placeholder={t('令牌分组，默认为用户的分组')}
                         optionList={groups}
                         renderOptionItem={renderGroupOption}
-                        filter={(input, option) => {
-                          const q = input.toLowerCase();
-                          return (
-                            option.value?.toLowerCase().includes(q) ||
-                            (typeof option.label === 'string' &&
-                              option.label.toLowerCase().includes(q))
-                          );
-                        }}
+                        filter
+                        showSearch
+                        autoClearSearchValue
+                        searchPosition='dropdown'
                         showClear
                         style={{ width: '100%' }}
                       />
