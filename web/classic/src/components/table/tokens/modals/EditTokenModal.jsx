@@ -23,10 +23,10 @@ import {
   showError,
   showSuccess,
   timestamp2string,
-  renderGroupOption,
   getCurrencyConfig,
   getModelCategories,
   selectFilter,
+  renderRatio,
 } from '../../../../helpers';
 import {
   quotaToDisplayAmount,
@@ -138,9 +138,16 @@ const EditTokenModal = (props) => {
     const { success, message, data } = res.data;
     if (success) {
       let localGroupOptions = Object.entries(data).map(([group, info]) => ({
-        label: info.desc,
+        label: (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <Typography.Text strong>{group}</Typography.Text>
+              <Typography.Text type='secondary' size='small'>{info.desc}</Typography.Text>
+            </div>
+            {info.ratio && info.ratio !== '自动' && renderRatio(info.ratio)}
+          </div>
+        ),
         value: group,
-        ratio: info.ratio,
       }));
       if (statusState?.status?.default_use_auto_group) {
         if (localGroupOptions.some((group) => group.value === 'auto')) {
@@ -148,9 +155,6 @@ const EditTokenModal = (props) => {
         }
       }
       setGroups(localGroupOptions);
-      // if (statusState?.status?.default_use_auto_group && formApiRef.current) {
-      //   formApiRef.current.setValue('group', 'auto');
-      // }
     } else {
       showError(t(message));
     }
@@ -388,8 +392,13 @@ const EditTokenModal = (props) => {
                       label={t('令牌分组')}
                       placeholder={groups.length === 0 ? t('管理员未设置用户可选分组') : t('令牌分组，默认为用户的分组')}
                       optionList={groups}
-                      renderOptionItem={renderGroupOption}
-                      filter
+                      renderSelectedItem={(optionNode) => ({
+                        content: optionNode?.value ?? '',
+                      })}
+                      filter={(input, option) => {
+                        const q = input.toLowerCase();
+                        return option.value?.toLowerCase().includes(q);
+                      }}
                       showSearch
                       autoClearSearchValue
                       searchPosition='dropdown'
