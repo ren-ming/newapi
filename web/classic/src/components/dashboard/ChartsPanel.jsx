@@ -51,25 +51,26 @@ const ChartsPanel = ({
             {t('模型数据分析')}
           </div>
           <Tabs
+            size='small'
             type='slash'
             activeKey={activeChartTab}
             onChange={setActiveChartTab}
           >
-            <TabPane tab={<span>{t('消耗分布')}</span>} itemKey='1' />
-            <TabPane tab={<span>{t('调用趋势')}</span>} itemKey='2' />
-            <TabPane tab={<span>{t('调用次数分布')}</span>} itemKey='3' />
-            <TabPane tab={<span>{t('调用次数排行')}</span>} itemKey='4' />
+            <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('消耗分布')}</span>} itemKey='1' />
+            <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('调用趋势')}</span>} itemKey='2' />
+            <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('调用次数分布')}</span>} itemKey='3' />
+            <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('调用次数排行')}</span>} itemKey='4' />
             {isAdminUser && (
-              <TabPane tab={<span>{t('用户消耗排行')}</span>} itemKey='5' />
+              <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('用户消耗排行')}</span>} itemKey='5' />
             )}
             {isAdminUser && (
-              <TabPane tab={<span>{t('用户消耗趋势')}</span>} itemKey='6' />
+              <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('用户消耗趋势')}</span>} itemKey='6' />
             )}
             {isAdminUser && (
-              <TabPane tab={<span>{t('用户 Token 消耗排行')}</span>} itemKey='7' />
+              <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('Token排行')}</span>} itemKey='7' />
             )}
             {isAdminUser && (
-              <TabPane tab={<span>{t('用户 Token 消耗趋势')}</span>} itemKey='8' />
+              <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('Token趋势')}</span>} itemKey='8' />
             )}
           </Tabs>
         </div>

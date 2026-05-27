@@ -35,6 +35,7 @@ import {
   updateMapValue,
   initializeMaps,
   processUserData,
+  formatTokenMetric,
 } from '../../helpers/dashboard';
 
 const USER_COLORS = [
@@ -403,7 +404,7 @@ export const useDashboardCharts = (
     label: {
       visible: true,
       position: 'outside',
-      formatMethod: (value, datum) => `${datum['rawToken'] || 0} tokens`,
+      formatMethod: (_v, datum) => `${formatTokenMetric(datum['rawToken'] || 0)} tokens`,
     },
     axes: [{
       orient: 'left',
@@ -418,7 +419,7 @@ export const useDashboardCharts = (
       mark: {
         content: [{
           key: (datum) => datum['User'],
-          value: (datum) => `${datum['rawToken'] || 0} tokens`,
+          value: (datum) => `${formatTokenMetric(datum['rawToken'] || 0)} tokens`,
         }],
       },
     },
@@ -442,7 +443,7 @@ export const useDashboardCharts = (
     axes: [{
       orient: 'left',
       label: {
-        formatMethod: (value) => `${value} tokens`,
+        formatMethod: (value) => formatTokenMetric(value),
       },
     }],
     area: { style: { fillOpacity: 0.15 } },
@@ -452,7 +453,7 @@ export const useDashboardCharts = (
       mark: {
         content: [{
           key: (datum) => datum['User'],
-          value: (datum) => `${datum['rawToken'] || 0} tokens`,
+          value: (datum) => `${formatTokenMetric(datum['rawToken'] || 0)} tokens`,
         }],
       },
       dimension: {
@@ -467,11 +468,11 @@ export const useDashboardCharts = (
             let value = parseFloat(array[i].value);
             if (isNaN(value)) value = 0;
             sum += value;
-            array[i].value = `${value} tokens`;
+            array[i].value = `${formatTokenMetric(value)} tokens`;
           }
           array.unshift({
             key: t('总计'),
-            value: `${sum} tokens`,
+            value: `${formatTokenMetric(sum)} tokens`,
           });
           return array;
         },
@@ -718,7 +719,7 @@ export const useDashboardCharts = (
         data: [{ id: 'userTokenRankData', values: userTokenRankValues }],
         title: {
           ...prev.title,
-          subtext: `${t('总计')}：${totalUserToken} tokens`,
+          subtext: `${t('总计')}：${formatTokenMetric(totalUserToken)} tokens`,
         },
       }));
 
@@ -727,7 +728,7 @@ export const useDashboardCharts = (
         Time: item.Time,
         User: item.User,
         rawToken: item.Token,
-        Usage: `${item.Token} tokens`,
+        Usage: `${formatTokenMetric(item.Token)} tokens`,
       }));
 
       setSpecUserTokenTrend((prev) => ({
@@ -735,7 +736,7 @@ export const useDashboardCharts = (
         data: [{ id: 'userTokenTrendData', values: userTokenTrendValues }],
         title: {
           ...prev.title,
-          subtext: `${t('总计')}：${totalUserToken} tokens`,
+          subtext: `${t('总计')}：${formatTokenMetric(totalUserToken)} tokens`,
         },
       }));
     },
