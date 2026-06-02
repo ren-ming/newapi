@@ -46,6 +46,13 @@ export function isRoot() {
   return user.role >= 100;
 }
 
+export function isGroupAdmin() {
+  let user = localStorage.getItem('user');
+  if (!user) return false;
+  user = JSON.parse(user);
+  return user.role === 5;
+}
+
 export function getSystemName() {
   let system_name = localStorage.getItem('system_name');
   if (!system_name) return 'New API';
