@@ -20,6 +20,7 @@ type QuotaData struct {
 	TokenUsed   int    `json:"token_used" gorm:"default:0"`
 	Count       int    `json:"count" gorm:"default:0"`
 	Quota       int    `json:"quota" gorm:"default:0"`
+	Group       string `json:"group" gorm:"type:varchar(64);index;default:''"`
 }
 
 func UpdateQuotaData() {
@@ -35,7 +36,7 @@ func UpdateQuotaData() {
 var CacheQuotaData = make(map[string]*QuotaData)
 var CacheQuotaDataLock = sync.Mutex{}
 
-func logQuotaDataCache(userId int, username string, modelName string, quota int, createdAt int64, tokenUsed int) {
+func logQuotaDataCache(userId int, username string, modelName string, quota int, createdAt int64, tokenUsed int, group string) {
 	key := fmt.Sprintf("%d-%s-%s-%d", userId, username, modelName, createdAt)
 	quotaData, ok := CacheQuotaData[key]
 	if ok {
@@ -51,18 +52,19 @@ func logQuotaDataCache(userId int, username string, modelName string, quota int,
 			Count:     1,
 			Quota:     quota,
 			TokenUsed: tokenUsed,
+			Group:     group,
 		}
 	}
 	CacheQuotaData[key] = quotaData
 }
 
-func LogQuotaData(userId int, username string, modelName string, quota int, createdAt int64, tokenUsed int) {
+func LogQuotaData(userId int, username string, modelName string, quota int, createdAt int64, tokenUsed int, group string) {
 	// 只精确到小时
 	createdAt = createdAt - (createdAt % 3600)
 
 	CacheQuotaDataLock.Lock()
 	defer CacheQuotaDataLock.Unlock()
-	logQuotaDataCache(userId, username, modelName, quota, createdAt, tokenUsed)
+	logQuotaDataCache(userId, username, modelName, quota, createdAt, tokenUsed, group)
 }
 
 func SaveQuotaDataCache() {
@@ -102,10 +104,13 @@ func increaseQuotaData(userId int, username string, modelName string, count int,
 	}
 }
 
-func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
+func GetQuotaDataByUsername(username string, startTime int64, endTime int64, group string) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
-	// 从quota_data表中查询数据
-	err = DB.Table("quota_data").Where("username = ? and created_at >= ? and created_at <= ?", username, startTime, endTime).Find(&quotaDatas).Error
+	tx := DB.Table("quota_data").Where("username = ? and created_at >= ? and created_at <= ?", username, startTime, endTime)
+	if group != "" {
+		tx = tx.Where(commonGroupCol+" = ?", group)
+	}
+	err = tx.Find(&quotaDatas).Error
 	return quotaDatas, err
 }
 
@@ -116,13 +121,15 @@ func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData
 	return quotaDatas, err
 }
 
-func GetQuotaDataGroupByUser(startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
+func GetQuotaDataGroupByUser(startTime int64, endTime int64, group string) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
-	err = DB.Table("quota_data").
+	tx := DB.Table("quota_data").
 		Select("username, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
-		Where("created_at >= ? and created_at <= ?", startTime, endTime).
-		Group("username, created_at").
-		Find(&quotaDatas).Error
+		Where("created_at >= ? and created_at <= ?", startTime, endTime)
+	if group != "" {
+		tx = tx.Where(commonGroupCol+" = ?", group)
+	}
+	err = tx.Group("username, created_at").Find(&quotaDatas).Error
 	if err != nil {
 		return nil, err
 	}
@@ -166,14 +173,40 @@ func fillQuotaDataDisplayNames(data []*QuotaData) {
 	}
 }
 
-func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaData []*QuotaData, err error) {
+func GetAllQuotaDates(startTime int64, endTime int64, username string, group string) (quotaData []*QuotaData, err error) {
 	if username != "" {
-		return GetQuotaDataByUsername(username, startTime, endTime)
+		return GetQuotaDataByUsername(username, startTime, endTime, group)
 	}
 	var quotaDatas []*QuotaData
-	// 从quota_data表中查询数据
-	// only select model_name, sum(count) as count, sum(quota) as quota, model_name, created_at from quota_data group by model_name, created_at;
-	//err = DB.Table("quota_data").Where("created_at >= ? and created_at <= ?", startTime, endTime).Find(&quotaDatas).Error
-	err = DB.Table("quota_data").Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, created_at").Where("created_at >= ? and created_at <= ?", startTime, endTime).Group("model_name, created_at").Find(&quotaDatas).Error
+	tx := DB.Table("quota_data").Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, created_at").Where("created_at >= ? and created_at <= ?", startTime, endTime)
+	if group != "" {
+		tx = tx.Where(commonGroupCol+" = ?", group)
+	}
+	err = tx.Group("model_name, created_at").Find(&quotaDatas).Error
 	return quotaDatas, err
+}
+
+// BackfillQuotaDataGroup populates the group column for existing quota_data rows.
+// Safe to run multiple times — only updates rows where group is empty.
+func BackfillQuotaDataGroup() {
+	var usernames []string
+	DB.Table("quota_data").
+		Where(commonGroupCol + " = ''").
+		Distinct("username").
+		Pluck("username", &usernames)
+	if len(usernames) == 0 {
+		return
+	}
+	for _, username := range usernames {
+		var user User
+		if err := DB.Where("username = ?", username).First(&user).Error; err != nil {
+			continue
+		}
+		if user.Group != "" {
+			DB.Table("quota_data").
+				Where("username = ?", username).
+				Where(commonGroupCol+" = ''").
+				Update(commonGroupCol, user.Group)
+		}
+	}
 }
