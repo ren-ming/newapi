@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Tabs, TabPane, Pagination } from '@douyinfe/semi-ui';
+import { Card, Tabs, TabPane } from '@douyinfe/semi-ui';
 import { PieChart } from 'lucide-react';
 import { VChart } from '@visactor/react-vchart';
 
@@ -33,10 +33,6 @@ const ChartsPanel = ({
   spec_user_trend,
   spec_user_token_rank,
   spec_user_token_trend,
-  tokenRankPage,
-  tokenRankTotal,
-  tokenRankPageSize,
-  onTokenRankPageChange,
   isAdminUser,
   CARD_PROPS,
   CHART_CONFIG,
@@ -60,12 +56,6 @@ const ChartsPanel = ({
             activeKey={activeChartTab}
             onChange={setActiveChartTab}
           >
-            {isAdminUser && (
-              <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('Token排行')}</span>} itemKey='7' />
-            )}
-            {isAdminUser && (
-              <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('Token趋势')}</span>} itemKey='8' />
-            )}
             <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('消耗分布')}</span>} itemKey='1' />
             <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('调用趋势')}</span>} itemKey='2' />
             <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('调用次数分布')}</span>} itemKey='3' />
@@ -75,6 +65,12 @@ const ChartsPanel = ({
             )}
             {isAdminUser && (
               <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('用户消耗趋势')}</span>} itemKey='6' />
+            )}
+            {isAdminUser && (
+              <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('Token排行')}</span>} itemKey='7' />
+            )}
+            {isAdminUser && (
+              <TabPane tab={<span className='text-xs whitespace-nowrap'>{t('Token趋势')}</span>} itemKey='8' />
             )}
           </Tabs>
         </div>
@@ -101,24 +97,7 @@ const ChartsPanel = ({
           <VChart spec={spec_user_trend} option={CHART_CONFIG} />
         )}
         {activeChartTab === '7' && isAdminUser && (
-          <>
-            <VChart spec={spec_user_token_rank} option={CHART_CONFIG} />
-            {tokenRankTotal > tokenRankPageSize && (
-              <div className='flex justify-center items-center gap-2 pt-1'>
-                <span className='text-xs select-none' style={{ color: 'var(--semi-color-text-2)' }}>
-                  {t('显示第')} {(tokenRankPage - 1) * tokenRankPageSize + 1} {t('条 - 第')} {Math.min(tokenRankPage * tokenRankPageSize, tokenRankTotal)} {t('条，共')} {tokenRankTotal} {t('条')}
-                </span>
-                <Pagination
-                  currentPage={tokenRankPage}
-                  pageSize={tokenRankPageSize}
-                  total={tokenRankTotal}
-                  onPageChange={onTokenRankPageChange}
-                  size='small'
-                  showTotal={false}
-                />
-              </div>
-            )}
-          </>
+          <VChart spec={spec_user_token_rank} option={CHART_CONFIG} />
         )}
         {activeChartTab === '8' && isAdminUser && (
           <VChart spec={spec_user_token_trend} option={CHART_CONFIG} />
