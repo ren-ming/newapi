@@ -14,7 +14,11 @@ func GetAllQuotaDates(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	username := c.Query("username")
-	dates, err := model.GetAllQuotaDates(startTimestamp, endTimestamp, username)
+	group := ""
+	if scopeGroup := c.GetString("scope_group"); scopeGroup != "" {
+		group = scopeGroup
+	}
+	dates, err := model.GetAllQuotaDates(startTimestamp, endTimestamp, username, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -30,7 +34,11 @@ func GetAllQuotaDates(c *gin.Context) {
 func GetQuotaDatesByUser(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	dates, err := model.GetQuotaDataGroupByUser(startTimestamp, endTimestamp)
+	group := ""
+	if scopeGroup := c.GetString("scope_group"); scopeGroup != "" {
+		group = scopeGroup
+	}
+	dates, err := model.GetQuotaDataGroupByUser(startTimestamp, endTimestamp, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return
