@@ -418,10 +418,12 @@ export const processUserData = (data, dataExportDefaultTime, limit = 10) => {
     Quota: quota,
   }));
 
-  const tokenRankingData = sorted.slice(0, limit).map(([username]) => ({
-    User: displayNameMap.get(username) || username,
-    Token: userTokenTotal.get(username) || 0,
-  }));
+  const tokenRankingData = Array.from(userTokenTotal.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([username, token]) => ({
+      User: displayNameMap.get(username) || username,
+      Token: token,
+    }));
 
   const showYear = isDataCrossYear(data.map((item) => item.created_at));
 

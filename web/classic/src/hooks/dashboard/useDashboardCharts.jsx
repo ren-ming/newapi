@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { initVChartSemiTheme } from '@visactor/vchart-semi-theme';
 import {
   modelColorMap,
@@ -54,6 +54,35 @@ export const useDashboardCharts = (
   setModelColors,
   t,
 ) => {
+  // ========== Token 排行分页 ==========
+  const TOKEN_RANK_PAGE_SIZE = 10;
+  const allTokenRankData = useRef([]);
+  const [tokenRankPage, setTokenRankPage] = useState(1);
+  const [tokenRankTotal, setTokenRankTotal] = useState(0);
+
+  const updateTokenRankPage = useCallback((page) => {
+    setTokenRankPage(page);
+    const start = (page - 1) * TOKEN_RANK_PAGE_SIZE;
+    const end = Math.min(start + TOKEN_RANK_PAGE_SIZE, allTokenRankData.current.length);
+    const pageData = allTokenRankData.current.slice(start, end);
+    const totalUserToken = allTokenRankData.current.reduce((s, i) => s + i.Token, 0);
+
+    const userTokenRankValues = pageData.map((item) => ({
+      User: item.User,
+      rawToken: item.Token,
+      Token: `${item.Token} tokens`,
+    }));
+
+    setSpecUserTokenRank((prev) => ({
+      ...prev,
+      data: [{ id: 'userTokenRankData', values: userTokenRankValues }],
+      title: {
+        ...prev.title,
+        subtext: `${t('总计')}：${formatTokenMetric(totalUserToken)} tokens`,
+      },
+    }));
+  }, [t]);
+
   // ========== 图表规格状态 ==========
   const [spec_pie, setSpecPie] = useState({
     type: 'pie',
@@ -404,7 +433,7 @@ export const useDashboardCharts = (
     label: {
       visible: true,
       position: 'outside',
-      formatMethod: (_v, datum) => `${formatTokenMetric(datum['rawToken'] || 0)} tokens`,
+      formatMethod: (_v, datum) => `${formatTokenMetric(datum['rawToken'] || 0)}`,
     },
     axes: [{
       orient: 'left',
@@ -419,7 +448,7 @@ export const useDashboardCharts = (
       mark: {
         content: [{
           key: (datum) => datum['User'],
-          value: (datum) => `${formatTokenMetric(datum['rawToken'] || 0)} tokens`,
+          value: (datum) => `${formatTokenMetric(datum['rawToken'] || 0)}`,
         }],
       },
     },
@@ -705,23 +734,11 @@ export const useDashboardCharts = (
         },
       }));
 
-      // Token版排行
-      const userTokenRankValues = tokenRankingData.map((item) => ({
-        User: item.User,
-        rawToken: item.Token,
-        Token: `${item.Token} tokens`,
-      })).sort((a, b) => b.rawToken - a.rawToken);
-
-      const totalUserToken = tokenRankingData.reduce((s, i) => s + i.Token, 0);
-
-      setSpecUserTokenRank((prev) => ({
-        ...prev,
-        data: [{ id: 'userTokenRankData', values: userTokenRankValues }],
-        title: {
-          ...prev.title,
-          subtext: `${t('总计')}：${formatTokenMetric(totalUserToken)} tokens`,
-        },
-      }));
+      // Token版排行 — 存储全量数据，渲染第一页
+      allTokenRankData.current = tokenRankingData;
+      setTokenRankTotal(tokenRankingData.length);
+      setTokenRankPage(1);
+      updateTokenRankPage(1);
 
       // Token版趋势
       const userTokenTrendValues = userTokenTrend.map((item) => ({
@@ -740,7 +757,7 @@ export const useDashboardCharts = (
         },
       }));
     },
-    [dataExportDefaultTime, t],
+    [dataExportDefaultTime, t, updateTokenRankPage],
   );
 
   // ========== 初始化图表主题 ==========
@@ -759,6 +776,10 @@ export const useDashboardCharts = (
     spec_user_trend,
     spec_user_token_rank,
     spec_user_token_trend,
+    tokenRankPage,
+    tokenRankTotal,
+    tokenRankPageSize: TOKEN_RANK_PAGE_SIZE,
+    updateTokenRankPage,
     updateChartData,
     updateUserChartData,
     generateModelColors,
