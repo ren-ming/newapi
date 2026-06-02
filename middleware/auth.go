@@ -33,12 +33,16 @@ func validUserInfo(username string, role int) bool {
 	return true
 }
 
-func authHelper(c *gin.Context, minRole int) {
+// validateAuth performs all auth validation and sets context values.
+// It does NOT call c.Next() — the caller is responsible for that.
+// Returns true if auth passed, false if it aborted the request.
+func validateAuth(c *gin.Context, minRole int) bool {
 	session := sessions.Default(c)
 	username := session.Get("username")
 	role := session.Get("role")
 	id := session.Get("id")
 	status := session.Get("status")
+	group := session.Get("group")
 	useAccessToken := false
 	if username == nil {
 		// Check access token
@@ -49,7 +53,7 @@ func authHelper(c *gin.Context, minRole int) {
 				"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
 			})
 			c.Abort()
-			return
+			return false
 		}
 		user, authErr := model.ValidateAccessToken(accessToken)
 		if authErr != nil {
@@ -66,7 +70,7 @@ func authHelper(c *gin.Context, minRole int) {
 				})
 			}
 			c.Abort()
-			return
+			return false
 		}
 		if user != nil && user.Username != "" {
 			if !validUserInfo(user.Username, user.Role) {
@@ -75,13 +79,13 @@ func authHelper(c *gin.Context, minRole int) {
 					"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),
 				})
 				c.Abort()
-				return
+				return false
 			}
-			// Token is valid
 			username = user.Username
 			role = user.Role
 			id = user.Id
 			status = user.Status
+			group = user.Group
 			useAccessToken = true
 		} else {
 			c.JSON(http.StatusOK, gin.H{
@@ -89,7 +93,7 @@ func authHelper(c *gin.Context, minRole int) {
 				"message": common.TranslateMessage(c, i18n.MsgAuthAccessTokenInvalid),
 			})
 			c.Abort()
-			return
+			return false
 		}
 	}
 	// get header New-Api-User
@@ -100,7 +104,7 @@ func authHelper(c *gin.Context, minRole int) {
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdNotProvided),
 		})
 		c.Abort()
-		return
+		return false
 	}
 	apiUserId, err := strconv.Atoi(apiUserIdStr)
 	if err != nil {
@@ -109,8 +113,7 @@ func authHelper(c *gin.Context, minRole int) {
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdFormatError),
 		})
 		c.Abort()
-		return
-
+		return false
 	}
 	if id != apiUserId {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -118,7 +121,7 @@ func authHelper(c *gin.Context, minRole int) {
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdMismatch),
 		})
 		c.Abort()
-		return
+		return false
 	}
 	if status.(int) == common.UserStatusDisabled {
 		c.JSON(http.StatusOK, gin.H{
@@ -126,7 +129,7 @@ func authHelper(c *gin.Context, minRole int) {
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserBanned),
 		})
 		c.Abort()
-		return
+		return false
 	}
 	if role.(int) < minRole {
 		c.JSON(http.StatusOK, gin.H{
@@ -134,7 +137,7 @@ func authHelper(c *gin.Context, minRole int) {
 			"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
 		})
 		c.Abort()
-		return
+		return false
 	}
 	if !validUserInfo(username.(string), role.(int)) {
 		c.JSON(http.StatusOK, gin.H{
@@ -142,18 +145,49 @@ func authHelper(c *gin.Context, minRole int) {
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),
 		})
 		c.Abort()
-		return
+		return false
 	}
 	// 防止不同newapi版本冲突，导致数据不通用
 	c.Header("Auth-Version", "864b7076dbcd0a3c01b5520316720ebf")
 	c.Set("username", username)
 	c.Set("role", role)
 	c.Set("id", id)
-	c.Set("group", session.Get("group"))
-	c.Set("user_group", session.Get("group"))
+	c.Set("group", group)
+	c.Set("user_group", group)
 	c.Set("use_access_token", useAccessToken)
+	return true
+}
 
-	c.Next()
+// authHelper is a thin wrapper around validateAuth.
+// Existing callers (UserAuth, AdminAuth, RootAuth) are unchanged.
+func authHelper(c *gin.Context, minRole int) {
+	if validateAuth(c, minRole) {
+		c.Next()
+	}
+}
+
+// AdminOrGroupAdminAuth allows group admins and above to access admin-scoped routes.
+// For group admins (role=5), it injects scope_group to enforce data isolation.
+func AdminOrGroupAdminAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		if !validateAuth(c, common.RoleGroupAdmin) {
+			return
+		}
+		role := c.GetInt("role")
+		if role == common.RoleGroupAdmin {
+			group := c.GetString("group")
+			if group == "" {
+				c.JSON(http.StatusForbidden, gin.H{
+					"success": false,
+					"message": "分组管理员必须属于一个分组",
+				})
+				c.Abort()
+				return
+			}
+			c.Set("scope_group", group)
+		}
+		c.Next()
+	}
 }
 
 func TryUserAuth() func(c *gin.Context) {
