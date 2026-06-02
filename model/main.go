@@ -285,6 +285,8 @@ func migrateDB() error {
 	if err != nil {
 		return err
 	}
+	// Backfill group column for existing quota_data rows (idempotent)
+	BackfillQuotaDataGroup()
 	if common.UsingSQLite {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
