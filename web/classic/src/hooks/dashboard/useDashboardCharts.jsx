@@ -748,12 +748,14 @@ export const useDashboardCharts = (
         Usage: `${formatTokenMetric(item.Token)} tokens`,
       }));
 
+      const totalTokenTrend = userTokenTrendValues.reduce((s, i) => s + (i.rawToken || 0), 0);
+
       setSpecUserTokenTrend((prev) => ({
         ...prev,
         data: [{ id: 'userTokenTrendData', values: userTokenTrendValues }],
         title: {
           ...prev.title,
-          subtext: `${t('总计')}：${formatTokenMetric(totalUserToken)} tokens`,
+          subtext: `${t('总计')}：${formatTokenMetric(totalTokenTrend)} tokens`,
         },
       }));
     },
