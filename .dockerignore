@@ -29,6 +29,9 @@ new-api
 docker-compose*.yml
 Dockerfile*
 
+# Dev data (MySQL, Redis local copies)
+dev-data/
+
 # Misc
 *.log
 *.tmp

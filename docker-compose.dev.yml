@@ -1,4 +1,4 @@
-# Frontend Development - Backend built from local source
+# Local Development - mirrors server2 setup with real data
 #
 # Usage:
 #   1. docker compose -f docker-compose.dev.yml up -d
@@ -11,8 +11,11 @@
 # Stop:
 #   docker compose -f docker-compose.dev.yml down
 #
-# Reset data:
-#   docker compose -f docker-compose.dev.yml down -v
+# Refresh data from server:
+#   rm -rf dev-data/mysql dev-data/redis
+#   mkdir -p dev-data/mysql dev-data/redis
+#   ssh server2 "docker exec new-api-mysql tar cf - -C /var/lib mysql" | tar xf - -C dev-data/
+#   ssh server2 "docker exec new-api-redis tar cf - -C /data ." | tar xf - -C dev-data/redis/
 
 services:
   new-api:
@@ -40,9 +43,11 @@ services:
       - dev-network
 
   redis:
-    image: redis:7-alpine
+    image: redis:latest
     container_name: new-api-dev-redis
     restart: unless-stopped
+    volumes:
+      - dev_redis_data:/data
     networks:
       - dev-network
 
@@ -66,6 +71,7 @@ services:
 volumes:
   dev_data:
   dev_mysql_data:
+  dev_redis_data:
 
 networks:
   dev-network:
