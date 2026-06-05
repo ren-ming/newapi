@@ -62,7 +62,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const [modelColors, setModelColors] = useState({});
 
   // ========== 图表状态 ==========
-  const [activeChartTab, setActiveChartTab] = useState('1');
+  const [activeChartTab, setActiveChartTab] = useState(isAdmin() || isGroupAdmin() ? '7' : '1');
 
   // ========== 趋势数据 ==========
   const [trendData, setTrendData] = useState({

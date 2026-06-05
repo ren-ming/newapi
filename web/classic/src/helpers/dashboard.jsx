@@ -419,6 +419,7 @@ export const processUserData = (data, dataExportDefaultTime, limit = 10) => {
   }));
 
   const tokenRankingData = Array.from(userTokenTotal.entries())
+    .filter(([, token]) => token > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([username, token]) => ({
       User: displayNameMap.get(username) || username,
