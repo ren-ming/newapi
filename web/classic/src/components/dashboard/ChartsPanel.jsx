@@ -101,10 +101,12 @@ const ChartsPanel = ({
           <VChart spec={spec_user_trend} option={CHART_CONFIG} />
         )}
         {activeChartTab === '7' && isAdminUser && (
-          <>
-            <VChart spec={spec_user_token_rank} option={CHART_CONFIG} />
+          <div className='flex flex-col h-full'>
+            <div className='flex-1 min-h-0'>
+              <VChart spec={spec_user_token_rank} option={CHART_CONFIG} />
+            </div>
             {tokenRankTotal > tokenRankPageSize && (
-              <div className='flex justify-center items-center gap-2 pt-1'>
+              <div className='flex justify-center items-center gap-2 py-1 shrink-0'>
                 <span className='text-xs select-none' style={{ color: 'var(--semi-color-text-2)' }}>
                   {t('显示第')} {(tokenRankPage - 1) * tokenRankPageSize + 1} {t('条 - 第')} {Math.min(tokenRankPage * tokenRankPageSize, tokenRankTotal)} {t('条，共')} {tokenRankTotal} {t('条')}
                 </span>
@@ -118,7 +120,7 @@ const ChartsPanel = ({
                 />
               </div>
             )}
-          </>
+          </div>
         )}
         {activeChartTab === '8' && isAdminUser && (
           <VChart spec={spec_user_token_trend} option={CHART_CONFIG} />
