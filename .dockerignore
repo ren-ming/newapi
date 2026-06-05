@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Frontend dependencies and build artifacts
+web/default/node_modules
+web/classic/node_modules
+web/default/dist
+web/classic/dist
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+new-api
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+
+# Misc
+*.log
+*.tmp
+img.png
