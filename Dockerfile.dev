@@ -3,6 +3,8 @@
 
 FROM golang:1.26.1-alpine AS builder
 
+RUN apk add --no-cache git
+
 ENV GO111MODULE=on CGO_ENABLED=0 GOPROXY=https://goproxy.io,direct
 ARG TARGETOS
 ARG TARGETARCH

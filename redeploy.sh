@@ -12,8 +12,8 @@ echo '[1/4] Stopping containers...'
 docker compose down
 echo ''
 
-echo '[2/4] Building images (no cache)...'
-docker compose build --no-cache
+echo '[2/4] Building images...'
+docker compose build
 echo ''
 
 echo '[3/4] Starting containers...'
