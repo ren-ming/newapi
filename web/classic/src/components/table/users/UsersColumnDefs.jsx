@@ -49,6 +49,12 @@ const renderRole = (role, t) => {
           {t('普通用户')}
         </Tag>
       );
+    case 5:
+      return (
+        <Tag color='green' shape='circle'>
+          {t('组内管理员')}
+        </Tag>
+      );
     case 10:
       return (
         <Tag color='yellow' shape='circle'>
@@ -286,14 +292,14 @@ const renderOperations = (
         size='small'
         onClick={() => showPromoteModal(record)}
       >
-        {t('提升')}
+        {record.role < 5 ? t('提升为组管理员') : t('提升')}
       </Button>
       <Button
         type='secondary'
         size='small'
         onClick={() => showDemoteModal(record)}
       >
-        {t('降级')}
+        {record.role >= 10 ? t('降为组管理员') : t('降级')}
       </Button>
       <Dropdown menu={moreMenu} trigger='click' position='bottomRight'>
         <Button type='tertiary' size='small' icon={<IconMore />} />
@@ -326,6 +332,11 @@ export const getUsersColumns = ({
       title: t('用户名'),
       dataIndex: 'username',
       render: (text, record) => renderUsername(text, record),
+    },
+    {
+      title: t('显示名称'),
+      dataIndex: 'display_name',
+      render: (text) => <span>{text || '-'}</span>,
     },
     {
       title: t('状态'),

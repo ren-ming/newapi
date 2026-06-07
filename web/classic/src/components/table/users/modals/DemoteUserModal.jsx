@@ -20,7 +20,19 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Modal } from '@douyinfe/semi-ui';
 
+const ROLE_GROUP_ADMIN = 5;
+const ROLE_ADMIN = 10;
+
 const DemoteUserModal = ({ visible, onCancel, onConfirm, user, t }) => {
+  let targetRoleName = '';
+  if (user) {
+    if (user.role >= ROLE_ADMIN) {
+      targetRoleName = t('组内管理员');
+    } else if (user.role === ROLE_GROUP_ADMIN) {
+      targetRoleName = t('普通用户');
+    }
+  }
+
   return (
     <Modal
       title={t('确定要降级此用户吗？')}
@@ -29,7 +41,9 @@ const DemoteUserModal = ({ visible, onCancel, onConfirm, user, t }) => {
       onOk={onConfirm}
       type='warning'
     >
-      {t('此操作将降低用户的权限级别')}
+      <div>
+        {t('此操作将降低用户的权限级别')}：{targetRoleName}
+      </div>
     </Modal>
   );
 };

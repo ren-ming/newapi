@@ -851,6 +851,7 @@ type ManageRequest struct {
 	Action string `json:"action"`
 	Value  int    `json:"value"`
 	Mode   string `json:"mode"`
+	Group  string `json:"group"`
 }
 
 // ManageUser Only admin user can do this
@@ -903,25 +904,43 @@ func ManageUser(c *gin.Context) {
 			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
 		}
 	case "promote":
-		if myRole != common.RoleRootUser {
-			common.ApiErrorI18n(c, i18n.MsgUserAdminCannotPromote)
-			return
-		}
 		if user.Role >= common.RoleAdminUser {
 			common.ApiErrorI18n(c, i18n.MsgUserAlreadyAdmin)
 			return
 		}
-		user.Role = common.RoleAdminUser
+		if user.Role < common.RoleGroupAdmin {
+			// 提升为组管理员：Admin(10) 即可操作
+			if myRole < common.RoleAdminUser {
+				common.ApiErrorI18n(c, i18n.MsgUserAdminCannotPromote)
+				return
+			}
+			user.Role = common.RoleGroupAdmin
+			if req.Group != "" {
+				user.Group = req.Group
+			}
+		} else {
+			// 组管理员 → 管理员：仅 Root 可操作
+			if myRole != common.RoleRootUser {
+				common.ApiErrorI18n(c, i18n.MsgUserAdminCannotPromote)
+				return
+			}
+			user.Role = common.RoleAdminUser
+		}
 	case "demote":
 		if user.Role == common.RoleRootUser {
 			common.ApiErrorI18n(c, i18n.MsgUserCannotDemoteRootUser)
 			return
 		}
-		if user.Role == common.RoleCommonUser {
+		if user.Role <= common.RoleCommonUser {
 			common.ApiErrorI18n(c, i18n.MsgUserAlreadyCommon)
 			return
 		}
-		user.Role = common.RoleCommonUser
+		if user.Role == common.RoleAdminUser {
+			user.Role = common.RoleGroupAdmin
+		} else if user.Role == common.RoleGroupAdmin {
+			user.Role = common.RoleCommonUser
+			user.Group = "default"
+		}
 	case "add_quota":
 		adminName := c.GetString("username")
 		adminId := c.GetInt("id")
@@ -990,6 +1009,7 @@ func ManageUser(c *gin.Context) {
 	clearUser := model.User{
 		Role:   user.Role,
 		Status: user.Status,
+		Group:  user.Group,
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

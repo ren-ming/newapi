@@ -337,6 +337,12 @@ export const useDashboardCharts = (
       visible: true,
       position: 'outside',
       formatMethod: (value, datum) => renderQuota(datum['rawQuota'] || 0, 2),
+      style: {
+        fontSize: 11,
+      },
+      overlap: {
+        hideOnHit: false,
+      },
     },
     axes: [{
       orient: 'left',
@@ -434,6 +440,12 @@ export const useDashboardCharts = (
       visible: true,
       position: 'outside',
       formatMethod: (_v, datum) => `${formatTokenMetric(datum['rawToken'] || 0)}`,
+      style: {
+        fontSize: 11,
+      },
+      overlap: {
+        hideOnHit: false,
+      },
     },
     axes: [{
       orient: 'left',

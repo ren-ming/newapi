@@ -103,8 +103,8 @@ const UsersTable = (usersData) => {
   };
 
   // Modal confirm handlers
-  const handlePromoteConfirm = () => {
-    manageUser(modalUser.id, 'promote', modalUser);
+  const handlePromoteConfirm = (group) => {
+    manageUser(modalUser.id, 'promote', modalUser, group);
     setShowPromoteModal(false);
   };
 
