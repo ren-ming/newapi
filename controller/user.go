@@ -939,7 +939,6 @@ func ManageUser(c *gin.Context) {
 			user.Role = common.RoleGroupAdmin
 		} else if user.Role == common.RoleGroupAdmin {
 			user.Role = common.RoleCommonUser
-			user.Group = "default"
 		}
 	case "add_quota":
 		adminName := c.GetString("username")
