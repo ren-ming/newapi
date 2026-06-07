@@ -21,7 +21,7 @@ services:
   new-api:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     image: new-api-dev:local
     container_name: new-api-dev
     restart: unless-stopped
