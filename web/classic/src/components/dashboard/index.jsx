@@ -96,15 +96,12 @@ const Dashboard = () => {
   };
 
   const initChart = async () => {
-    // 并行加载普通图表数据和用户排行数据，避免默认 Tab 显示空
-    await Promise.all([
-      dashboardData.loadQuotaData().then((data) => {
-        if (data && data.length > 0) {
-          dashboardCharts.updateChartData(data);
-        }
-      }),
-      loadUserData(),
-    ]);
+    await dashboardData.loadQuotaData().then((data) => {
+      if (data && data.length > 0) {
+        dashboardCharts.updateChartData(data);
+      }
+    });
+    await loadUserData();
     await dashboardData.loadUptimeData();
   };
 
