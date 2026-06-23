@@ -97,3 +97,6 @@ volumes:
 networks:
   new-api-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.40.0.0/24   # 指定子网，避免 docker 默认分配到 172.18.x 与 server2(172.18.1.202)冲突
