@@ -8,7 +8,7 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 
 ## Tech Stack
 
-- **Backend**: Go 1.22+, Gin web framework, GORM v2 ORM
+- **Backend**: Go 1.25+ (per `go.mod`), Gin web framework, GORM v2 ORM
 - **Frontend**: React 19, TypeScript, Rsbuild, Base UI, Tailwind CSS
 - **Databases**: SQLite, MySQL, PostgreSQL (all three must be supported)
 - **Cache**: Redis (go-redis) + in-memory cache
@@ -118,7 +118,7 @@ bun run build
 ### Full Stack (Docker Dev)
 
 ```bash
-# Start backend services (PostgreSQL + Redis + Go backend in Docker)
+# Start backend services (MySQL + Redis + Go backend in Docker)
 make dev-api
 
 # Start frontend dev server
@@ -134,7 +134,7 @@ make reset-setup
 make all
 ```
 
-The dev Docker setup (`docker-compose.dev.yml`) runs PostgreSQL, Redis, and the Go backend on port 3000. The frontend dev server runs on port 3001 and proxies API requests to :3000.
+The dev Docker setup (`docker-compose.dev.yml`) runs MySQL 8.2, Redis, and the Go backend on port 3000. The frontend dev server runs on port 3001 and proxies API requests to :3000.
 
 ## Internationalization (i18n)
 
