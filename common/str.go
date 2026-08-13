@@ -186,6 +186,19 @@ func maskHostForPlainDomain(domain string) string {
 // www.openai.com -> ***.***.com
 // api.openai.com -> ***.***.com
 func MaskSensitiveInfo(str string) string {
+	return maskSensitiveInfo(str, true)
+}
+
+// MaskSensitiveInfoForLog masks sensitive info for internal error logs.
+// Unlike MaskSensitiveInfo, it does NOT mask bare dotted words (the domain
+// pattern), so event-type strings like "response.failed"/"response.completed"
+// from upstream SSE are preserved for debugging. URL/IP/API-key masking still
+// applies. Use this only for admin-visible logs, never for client responses.
+func MaskSensitiveInfoForLog(str string) string {
+	return maskSensitiveInfo(str, false)
+}
+
+func maskSensitiveInfo(str string, maskDomain bool) string {
 	// Mask URLs
 	str = maskURLPattern.ReplaceAllStringFunc(str, func(urlStr string) string {
 		u, err := url.Parse(urlStr)
@@ -239,10 +252,14 @@ func MaskSensitiveInfo(str string) string {
 		return result
 	})
 
-	// Mask domain names without protocol (like openai.com, www.openai.com)
-	str = maskDomainPattern.ReplaceAllStringFunc(str, func(domain string) string {
-		return maskHostForPlainDomain(domain)
-	})
+	// Mask domain names without protocol (like openai.com, www.openai.com).
+	// Skipped for logs (maskDomain=false) to avoid masking dotted event types
+	// such as "response.failed", which this regex otherwise treats as a domain.
+	if maskDomain {
+		str = maskDomainPattern.ReplaceAllStringFunc(str, func(domain string) string {
+			return maskHostForPlainDomain(domain)
+		})
+	}
 
 	// Mask IP addresses
 	str = maskIPPattern.ReplaceAllString(str, "***.***.***.***")

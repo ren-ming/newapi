@@ -55,7 +55,8 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 
-	if oaiError := responsesResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
+	// Type 空但有 code/message(如 Codex 的 context_length_exceeded)也要透传,避免真因被吞
+	if oaiError := responsesResp.GetOpenAIError(); oaiError != nil && (oaiError.Type != "" || oaiError.Message != "") {
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 
@@ -234,10 +235,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		if callID == "" {
 			return true
 		}
-		if outputText.Len() > 0 {
-			// Prefer streaming assistant text over tool calls to match non-stream behavior.
-			return true
-		}
+		// 文本与 tool_call 共存发送(reasoning 模型会先输出文本再调工具,不应丢弃 tool_call)
 		if !sendStartIfNeeded() {
 			return false
 		}
@@ -484,7 +482,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 					info.ClaudeConvertInfo.Usage = usage
 				}
 				finishReason := "stop"
-				if sawToolCall && outputText.Len() == 0 {
+				if sawToolCall {
 					finishReason = "tool_calls"
 				}
 				stop := helper.GenerateStopResponse(responseId, createAt, model, finishReason)
@@ -496,8 +494,17 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			}
 
 		case "response.error", "response.failed":
+			// 诊断:标准 Error 字段解析失败时,打印上游原始失败 payload 以定位真因(如 Codex response.failed)
 			if streamResp.Response != nil {
-				if oaiErr := streamResp.Response.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
+				if raw, mErr := common.Marshal(streamResp.Response); mErr == nil {
+					common.SysError(fmt.Sprintf("responses upstream %s raw payload: %s", streamResp.Type, common.MaskSensitiveInfoForLog(string(raw))))
+				}
+			} else {
+				common.SysError(fmt.Sprintf("responses upstream failure: payload nil, event=%s", streamResp.Type))
+			}
+			if streamResp.Response != nil {
+				// Type 空但有 code/message(如 Codex 的 context_length_exceeded)也要透传,避免真因被吞
+			if oaiErr := streamResp.Response.GetOpenAIError(); oaiErr != nil && (oaiErr.Type != "" || oaiErr.Message != "") {
 					streamErr = types.WithOpenAIError(*oaiErr, http.StatusInternalServerError)
 					sr.Stop(streamErr)
 					return
@@ -529,7 +536,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			info.ClaudeConvertInfo.Usage = usage
 		}
 		finishReason := "stop"
-		if sawToolCall && outputText.Len() == 0 {
+		if sawToolCall {
 			finishReason = "tool_calls"
 		}
 		stop := helper.GenerateStopResponse(responseId, createAt, model, finishReason)
