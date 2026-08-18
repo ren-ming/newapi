@@ -2,9 +2,11 @@ package service
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -42,12 +44,37 @@ func EnableChannel(channelId int, usingKey string, channelName string) {
 	}
 }
 
-func ShouldDisableChannel(err *types.NewAPIError) bool {
+const (
+	codexInvalidatedOAuthMessage = "invalidated oauth token for user"
+	codexUsageLimitMessage       = "the usage limit has been reached"
+)
+
+func shouldDisableCodexCredentialError(err *types.NewAPIError) bool {
+	if err == nil {
+		return false
+	}
+
+	lowerMessage := strings.ToLower(err.Error())
+	switch err.StatusCode {
+	case http.StatusUnauthorized:
+		return strings.Contains(lowerMessage, codexInvalidatedOAuthMessage)
+	case http.StatusTooManyRequests:
+		return strings.Contains(lowerMessage, codexUsageLimitMessage)
+	default:
+		return false
+	}
+}
+
+func ShouldDisableChannel(channelType int, err *types.NewAPIError) bool {
 	if !common.AutomaticDisableChannelEnabled {
 		return false
 	}
 	if err == nil {
 		return false
+	}
+	if channelType == constant.ChannelTypeCodex &&
+		(err.StatusCode == http.StatusUnauthorized || err.StatusCode == http.StatusTooManyRequests) {
+		return shouldDisableCodexCredentialError(err)
 	}
 	if types.IsChannelError(err) {
 		return true

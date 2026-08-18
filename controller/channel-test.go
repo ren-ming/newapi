@@ -441,7 +441,7 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 			return testResult{
 				context:     c,
 				localErr:    err,
-				newAPIError: types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError),
+				newAPIError: types.NewOpenAIError(err, types.ErrorCodeBadResponse, httpResp.StatusCode),
 			}
 		}
 	}
@@ -910,7 +910,7 @@ func testAllChannels(notify bool) error {
 			newAPIError := result.newAPIError
 			// request error disables the channel
 			if newAPIError != nil {
-				shouldBanChannel = service.ShouldDisableChannel(result.newAPIError)
+				shouldBanChannel = service.ShouldDisableChannel(channel.Type, result.newAPIError)
 			}
 
 			// 当错误检查通过，才检查响应时间
