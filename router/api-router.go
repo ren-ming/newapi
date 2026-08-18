@@ -223,7 +223,10 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.GET("/models", controller.ChannelListModels)
 			channelRoute.GET("/models_enabled", controller.EnabledListModels)
 			channelRoute.GET("/:id", controller.GetChannel)
-			channelRoute.POST("/:id/key", middleware.RootAuth(), middleware.CriticalRateLimit(), middleware.DisableCache(), middleware.SecureVerificationRequired(), controller.GetChannelKey)
+			// SECURITY: 2026-08-13 admin 被入侵后硬下线"查看渠道密钥"接口。
+			// 需要查看 key 时,通过容器 `codex login` 取 ~/.codex/auth.json,不依赖此接口。
+			// 详见 docs/security/2026-08-13-channel-key-hardening.md
+			// channelRoute.POST("/:id/key", middleware.RootAuth(), middleware.CriticalRateLimit(), middleware.DisableCache(), middleware.SecureVerificationRequired(), controller.GetChannelKey)
 			channelRoute.GET("/test", controller.TestAllChannels)
 			channelRoute.GET("/test/:id", controller.TestChannel)
 			channelRoute.GET("/update_balance", controller.UpdateAllChannelsBalance)

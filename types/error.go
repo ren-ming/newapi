@@ -156,7 +156,7 @@ func (e *NewAPIError) MaskSensitiveError() string {
 	if e.errorCode == ErrorCodeCountTokenFailed {
 		return errStr
 	}
-	return common.MaskSensitiveInfo(errStr)
+	return common.MaskSensitiveInfoForLog(errStr)
 }
 
 func (e *NewAPIError) MaskSensitiveErrorWithStatusCode() string {
