@@ -55,7 +55,6 @@ func TestLoadConfigDefaults(t *testing.T) {
 	assert.Equal(t, ":8080", config.ListenAddr)
 	assert.Equal(t, 30*time.Second, config.HTTPTimeout)
 	assert.Equal(t, 2*time.Second, config.PollInterval)
-	assert.Equal(t, 100, config.MaxBatchSize)
 }
 
 func testConfig(t *testing.T) config {

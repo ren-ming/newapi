@@ -3,30 +3,31 @@ package accountautomation
 import (
 	"context"
 	"crypto/subtle"
-	"embed"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 )
 
-// BatchService is the smallest service contract required by the HTTP layer.
-type BatchService interface {
-	Submit(context.Context, CreateBatchRequest) (Batch, error)
-	GetBatch(string) (Batch, bool)
-	ListBatches() []Batch
+// JobService is the smallest service contract required by the HTTP layer.
+type JobService interface {
+	SubmitJob(context.Context, CreateJobRequest) (Job, error)
+	GetJob(string) (Job, bool)
+	ListJobs(offset, limit int) ([]Job, int64, error)
 }
 
 type ServerLogger = *log.Logger
 
-const maxRequestBodyBytes int64 = 1 << 20
+const (
+	maxRequestBodyBytes int64 = 1 << 20
+	defaultJobListLimit       = 50
+	maxJobListLimit           = 200
+)
 
-//go:embed web/index.html
-var webFiles embed.FS
-
-func NewServer(service BatchService, adminToken string, logger ServerLogger) http.Handler {
+func NewServer(service JobService, adminToken string, logger ServerLogger) http.Handler {
 	if service == nil || strings.TrimSpace(adminToken) == "" {
 		panic("accountautomation: service and admin token are required")
 	}
@@ -38,7 +39,7 @@ func NewServer(service BatchService, adminToken string, logger ServerLogger) htt
 // authentication: it must only be mounted behind a host that authenticates
 // requests itself (e.g. the new-api admin middleware in front of
 // /api/account-automation).
-func NewTrustedServer(service BatchService, logger ServerLogger) http.Handler {
+func NewTrustedServer(service JobService, logger ServerLogger) http.Handler {
 	if service == nil {
 		panic("accountautomation: service is required")
 	}
@@ -47,7 +48,7 @@ func NewTrustedServer(service BatchService, logger ServerLogger) http.Handler {
 }
 
 type server struct {
-	service    BatchService
+	service    JobService
 	adminToken string
 	logger     ServerLogger
 }
@@ -56,10 +57,10 @@ func (s *server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/healthz":
 		s.health(w, r)
-	case r.URL.Path == "/":
-		s.index(w, r)
-	case strings.HasPrefix(r.URL.Path, "/batches"):
-		s.apiBatches(w, r)
+	case r.URL.Path == "/jobs":
+		s.apiJobs(w, r)
+	case strings.HasPrefix(r.URL.Path, "/jobs/"):
+		s.apiJob(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -74,54 +75,21 @@ func (s *server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (s *server) index(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	data, err := webFiles.ReadFile("web/index.html")
-	if err != nil {
-		http.Error(w, "page unavailable", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
-}
-
-func (s *server) apiBatches(w http.ResponseWriter, r *http.Request) {
+func (s *server) apiJobs(w http.ResponseWriter, r *http.Request) {
 	if !s.authorized(r) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if r.URL.Path == "/batches" {
-		s.collection(w, r)
-		return
-	}
-	if strings.HasPrefix(r.URL.Path, "/batches/") && r.Method == http.MethodGet {
-		id := strings.TrimPrefix(r.URL.Path, "/batches/")
-		if id == "" || strings.Contains(id, "/") {
-			http.NotFound(w, r)
-			return
-		}
-		batch, found := s.service.GetBatch(id)
-		if !found {
-			http.NotFound(w, r)
-			return
-		}
-		writeJSON(w, http.StatusOK, batch)
-		return
-	}
-	w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-}
-
-func (s *server) collection(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, s.service.ListBatches())
+		offset, limit := jobListParams(r)
+		jobs, total, err := s.service.ListJobs(offset, limit)
+		if err != nil {
+			statusError(w, http.StatusInternalServerError, "list jobs failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs, "total": total})
 	case http.MethodPost:
 		defer r.Body.Close()
 		data, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodyBytes+1))
@@ -133,21 +101,60 @@ func (s *server) collection(w http.ResponseWriter, r *http.Request) {
 			statusError(w, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		var request CreateBatchRequest
+		var request CreateJobRequest
 		if err := common.Unmarshal(data, &request); err != nil {
 			statusError(w, http.StatusBadRequest, "invalid request")
 			return
 		}
-		batch, err := s.service.Submit(r.Context(), request)
+		job, err := s.service.SubmitJob(r.Context(), request)
 		if err != nil {
 			statusError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusAccepted, batch)
+		writeJSON(w, http.StatusAccepted, job)
 	default:
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *server) apiJob(w http.ResponseWriter, r *http.Request) {
+	if !s.authorized(r) {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/jobs/")
+	if id == "" || strings.Contains(id, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	job, found := s.service.GetJob(id)
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+func jobListParams(r *http.Request) (offset, limit int) {
+	offset, _ = strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	limit, _ = strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 {
+		limit = defaultJobListLimit
+	}
+	if limit > maxJobListLimit {
+		limit = maxJobListLimit
+	}
+	return offset, limit
 }
 
 func (s *server) authorized(r *http.Request) bool {

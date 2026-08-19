@@ -21,7 +21,6 @@ const (
 	defaultListenAddr    = ":8080"
 	defaultHTTPTimeout   = 30 * time.Second
 	defaultPollInterval  = 2 * time.Second
-	defaultMaxBatchSize  = 100
 	defaultBatchDeadline = 45 * time.Minute
 	shutdownTimeout      = 10 * time.Second
 )
@@ -44,7 +43,6 @@ type config struct {
 	ListenAddr      string
 	HTTPTimeout     time.Duration
 	PollInterval    time.Duration
-	MaxBatchSize    int
 }
 
 type lookupEnv func(string) (string, bool)
@@ -107,18 +105,17 @@ func serveAndWait(server *http.Server, listener net.Listener, shutdownSignal <-c
 
 func wire(cfg config) http.Handler {
 	httpClient := &http.Client{Timeout: cfg.HTTPTimeout}
-	store := accountautomation.NewMemoryStore()
+	store := accountautomation.NewMemoryJobStore()
 	sms688 := accountautomation.NewSMS688Client(cfg.SMS688BaseURL, cfg.SMS688APIKey, httpClient)
 	newAPI := accountautomation.NewNewAPIClient(cfg.NewAPIBaseURL, cfg.NewAPIAccessKey, cfg.NewAPIUserID, httpClient)
 	logger := structuredLogger{}
 	orchestrator := accountautomation.NewOrchestrator(store, sms688, newAPI, logger, accountautomation.OrchestratorConfig{
 		PollInterval:  cfg.PollInterval,
 		BatchDeadline: defaultBatchDeadline,
-		MaxBatchSize:  cfg.MaxBatchSize,
 	})
 	handler := accountautomation.NewServer(orchestrator, cfg.AdminToken, nil)
-	// The handler serves "/", "/healthz" and "/batches"; keep the standalone
-	// deployment's historical /api/batches URL working via a stripped mux.
+	// The handler serves "/healthz" and "/jobs"; keep the standalone
+	// deployment's historical /api prefix working via a stripped mux.
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", handler))
 	mux.Handle("/", handler)
@@ -145,7 +142,6 @@ func loadConfig(lookup lookupEnv) (config, error) {
 		ListenAddr:      optionalEnvironment(lookup, "AUTOMATION_LISTEN_ADDR", defaultListenAddr),
 		HTTPTimeout:     defaultHTTPTimeout,
 		PollInterval:    defaultPollInterval,
-		MaxBatchSize:    defaultMaxBatchSize,
 	}, nil
 }
 

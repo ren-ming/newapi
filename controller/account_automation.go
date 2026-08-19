@@ -109,7 +109,7 @@ func InitAccountAutomation() {
 			baseURL = accountautomation.DefaultSMS688BaseURL
 		}
 		orchestrator := accountautomation.NewOrchestrator(
-			accountautomation.NewMemoryStore(),
+			accountautomation.NewMemoryJobStore(),
 			accountautomation.NewSMS688Client(baseURL, apiKey, &http.Client{Timeout: 30 * time.Second}),
 			AccountAutomationChannelService{},
 			accountAutomationLogger{},
