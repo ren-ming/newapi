@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>账号自动化</title>
+  <style>
+    body { font: 16px system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; color: #172033; }
+    textarea { width: 100%; min-height: 10rem; box-sizing: border-box; }
+    button { padding: .55rem 1rem; margin: .5rem 0; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #d8dee9; padding: .5rem; text-align: left; }
+    .error { color: #a11; }
+  </style>
+</head>
+<body>
+  <h1>账号自动化</h1>
+  <p>管理员批次提交与状态查看</p>
+  <label for="token">管理员令牌</label>
+  <input id="token" type="password" autocomplete="off">
+  <label for="account-text">账号输入（每行：channel_id|account）</label>
+  <textarea id="account-text" autocomplete="off"></textarea>
+  <label><input id="bind-free" type="checkbox"> 绑定免费额度</label>
+  <button id="submit">提交批次</button>
+  <p id="message" role="status"></p>
+  <section>
+    <h2>批次</h2>
+    <div id="batches">暂无批次</div>
+  </section>
+<script>
+(() => {
+  const token = document.querySelector('#token');
+  const accountText = document.querySelector('#account-text');
+  const bindFree = document.querySelector('#bind-free');
+  const message = document.querySelector('#message');
+  const batches = document.querySelector('#batches');
+  let timer = null;
+  const headers = () => ({'Authorization': `Bearer ${token.value}`, 'Content-Type': 'application/json'});
+  const showError = (text) => { message.textContent = text; message.className = 'error'; };
+  const render = (items) => {
+    if (!items.length) { batches.textContent = '暂无批次'; return; }
+    batches.innerHTML = items.map(batch => `<article><h3>${escapeHTML(batch.id)}</h3><p>状态：${escapeHTML(batch.status)}，错误分类：${escapeHTML(batch.error_class || '')}</p>${renderAccounts(batch.accounts || [])}</article>`).join('');
+  };
+  const renderAccounts = (accounts) => `<table><thead><tr><th>脱敏邮箱</th><th>channel</th><th>status</th><th>error_class</th></tr></thead><tbody>${accounts.map(account => `<tr><td>${escapeHTML(account.masked_email || '')}</td><td>${escapeHTML(String(account.channel_id || ''))}</td><td>${escapeHTML(account.status || '')}</td><td>${escapeHTML(account.error_class || '')}</td></tr>`).join('')}</tbody></table>`;
+  const escapeHTML = (value) => String(value).replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;', '"':'&quot;'}[character]));
+  const refresh = async () => {
+    if (!token.value) return;
+    try {
+      const response = await fetch('/api/batches', {headers: headers()});
+      if (!response.ok) throw new Error('读取批次失败');
+      render(await response.json());
+    } catch (error) { showError(error.message); }
+  };
+  document.querySelector('#submit').addEventListener('click', async () => {
+    message.textContent = '';
+    try {
+      const response = await fetch('/api/batches', {method: 'POST', headers: headers(), body: JSON.stringify({account_text: accountText.value, bind_free: bindFree.checked})});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '提交失败');
+      accountText.value = '';
+      await refresh();
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 2000);
+      message.textContent = '提交成功';
+    } catch (error) { showError(error.message); }
+  });
+  refresh();
+})();
+</script>
+</body>
+</html>
