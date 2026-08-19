@@ -4478,13 +4478,22 @@
     "Zhipu V4": "智谱 V4",
     "Zoom": "缩放",
     "Account Automation": "账号自动化",
-    "Submit account lines as channel_id|email----password; CPA credentials are written into the Codex channel automatically": "提交 渠道ID|邮箱----密码 格式账号行，CPA 凭据自动写入 Codex 渠道",
+    "Submit one account per job; the CPA credential is written into the selected Codex channel automatically": "每次提交一个账号；CPA 凭据将自动写入所选 Codex 渠道",
     "Submit accounts": "提交账号",
-    "One account per line, format: channel_id|email----password": "每行一个账号，格式：渠道ID|邮箱----密码",
+    "One account = one job; history is kept in the database": "一个账号 = 一条任务；历史记录保存在数据库中",
+    "Account type": "账号类型",
+    "Microsoft": "微软邮箱",
+    "TOTP": "2FA 动态口令",
+    "Account": "账号",
+    "Format: email----password (or email----password----client_id----refresh_token)": "格式：邮箱----密码（或 邮箱----密码----client_id----refresh_token）",
+    "Format: email----password----TOTP_SECRET": "格式：邮箱----密码----TOTP_SECRET",
+    "Target channel": "目标渠道",
+    "No Codex channels": "暂无 Codex 渠道",
+    "Select a Codex channel first": "请先选择 Codex 渠道",
     "Bind free plan": "绑定免费计划",
-    "Batch submitted": "批次已提交",
-    "Batches": "批次列表",
+    "Job submitted": "任务已提交",
+    "Jobs": "任务列表",
     "Auto-refreshes every 2 seconds": "每 2 秒自动刷新",
-    "No batches yet": "暂无批次"
+    "No jobs yet": "暂无任务"
   }
 }
