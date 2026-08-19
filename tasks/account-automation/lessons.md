@@ -46,3 +46,14 @@ NEWAPI_USER_ID=... AUTOMATION_ADMIN_TOKEN=... go run ./cmd/account-automation
 - 浏览器表单提交、2s 短轮询、提交后清空账号输入、多批次并排渲染（含失败批次的 `error_class` 列）均正常，无 console 错误。
 - 服务端日志泄漏扫描（密码/token/邮箱明文/凭据）0 命中。
 - 冒烟踩坑：发给 SMS688 的 `account_text` 已去掉 `channel_id|` 前缀（每行 `email----password`），写 mock 时不要按带前缀格式解析。
+
+## Code review 修复（2026-08-19）
+
+审查 9 项发现，修复 4 项 CONFIRMED（全部 `sms688.go`）：
+
+1. **禁跟随重定向**：构造器值拷贝注入的 client 并设 `CheckRedirect → http.ErrUseLastResponse`。原因：`Idempotency-Key`/`X-Submission-Token` 不在 net/http 跨主机敏感头剥离名单，307/308 还会重发明文账号请求体；拷贝不影响调用方共享 client。
+2. **错误前缀改为稳定类名**（`sms688_transport_error:` 等）：`"sms688: "` 会被 orchestrator 的 errorClass 首冒号截断成未定义类 `sms688`，日志/告警按类统计完全失真。
+3. **`%w` 包装保留错误链**：传输层 `*url.Error` 的超时/取消语义（`errors.Is`）恢复可用。
+4. **2xx 契约校验**：CreateTask/GetTask 校验 `batch_id` 非空，否则 `sms688_invalid_response`——防 `{}` 响应静默零值导致轮询空转到 45 分钟超时。
+
+接受不修（已评审）：CreateTask 无重试、DownloadCPA 不校验 Content-Type、先读满再判状态码、readLimited 与 newapi.go 守卫重复、nil httpClient 回退 DefaultClient（当前接线不可达）。

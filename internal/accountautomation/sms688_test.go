@@ -2,10 +2,12 @@ package accountautomation
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -139,6 +141,83 @@ func TestSMS688ClientRejectsEmptyIdentifiers(t *testing.T) {
 	}
 	if _, err := client.GetTask(context.Background(), ""); err == nil {
 		t.Fatal("expected empty batch ID error")
+	}
+}
+
+func TestSMS688ClientDoesNotFollowRedirects(t *testing.T) {
+	t.Parallel()
+	var redirectHits int32
+	evil := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&redirectHits, 1)
+	}))
+	defer evil.Close()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", evil.URL)
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer server.Close()
+
+	_, err := NewSMS688Client(server.URL, "key", server.Client()).GetTask(context.Background(), "batch-1")
+	if err == nil || !strings.HasPrefix(err.Error(), "sms688_http_error:") {
+		t.Fatalf("error = %v", err)
+	}
+	if atomic.LoadInt32(&redirectHits) != 0 {
+		t.Fatal("client followed a redirect to an external host")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestSMS688ClientPreservesErrorChain(t *testing.T) {
+	t.Parallel()
+	transportErr := errors.New("connection reset by peer")
+	client := &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+		return nil, transportErr
+	})}
+
+	_, err := NewSMS688Client("http://127.0.0.1", "key", client).GetTask(context.Background(), "batch-1")
+	if err == nil || !strings.HasPrefix(err.Error(), "sms688_transport_error:") {
+		t.Fatalf("error = %v", err)
+	}
+	if !errors.Is(err, transportErr) {
+		t.Fatalf("error chain lost: %v", err)
+	}
+}
+
+func TestSMS688ClientRequiresBatchIDInResponses(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"all_finished":false}`)
+	}))
+	defer server.Close()
+	client := NewSMS688Client(server.URL, "key", server.Client())
+
+	_, err := client.CreateTask(context.Background(), SMS688CreateRequest{}, "submission-1")
+	if err == nil || !strings.HasPrefix(err.Error(), "sms688_invalid_response:") {
+		t.Fatalf("CreateTask error = %v", err)
+	}
+	_, err = client.GetTask(context.Background(), "batch-1")
+	if err == nil || !strings.HasPrefix(err.Error(), "sms688_invalid_response:") {
+		t.Fatalf("GetTask error = %v", err)
+	}
+}
+
+func TestSMS688ClientInvalidResponseDoesNotLeakBody(t *testing.T) {
+	t.Parallel()
+	const responseBody = "private-upstream-error-detail"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "not-json"+responseBody)
+	}))
+	defer server.Close()
+
+	_, err := NewSMS688Client(server.URL, "key", server.Client()).GetTask(context.Background(), "batch-1")
+	if err == nil || !strings.HasPrefix(err.Error(), "sms688_decode_error:") {
+		t.Fatalf("error = %v", err)
+	}
+	if strings.Contains(err.Error(), responseBody) {
+		t.Fatalf("error leaked response body: %q", err)
 	}
 }
 

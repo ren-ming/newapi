@@ -27,21 +27,29 @@ func NewSMS688Client(baseURL string, apiKey string, httpClient *http.Client) *SM
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
+	// Never follow redirects: Idempotency-Key/X-Submission-Token are not in
+	// net/http's cross-host sensitive-header strip list, and a 307/308 would
+	// replay the request body (plaintext account lines). Copy the client so
+	// the caller's shared instance keeps its own redirect policy.
+	ownClient := *httpClient
+	ownClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 	return &SMS688Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiKey:     apiKey,
-		httpClient: httpClient,
+		httpClient: &ownClient,
 	}
 }
 
 func (c *SMS688Client) CreateTask(ctx context.Context, request SMS688CreateRequest, idempotencyKey string) (RemoteBatch, error) {
 	var batch RemoteBatch
 	if idempotencyKey == "" {
-		return batch, errors.New("sms688: idempotency key is required")
+		return batch, errors.New("sms688_invalid_request: idempotency key is required")
 	}
 	body, err := common.Marshal(request)
 	if err != nil {
-		return batch, errors.New("sms688: encode create request")
+		return batch, fmt.Errorf("sms688_encode_request: %w", err)
 	}
 	req, err := c.newRequest(ctx, http.MethodPost, sms688TasksPath, bytes.NewReader(body))
 	if err != nil {
@@ -56,7 +64,10 @@ func (c *SMS688Client) CreateTask(ctx context.Context, request SMS688CreateReque
 		return batch, err
 	}
 	if err := common.Unmarshal(response.body, &batch); err != nil {
-		return batch, errors.New("sms688: invalid create response")
+		return batch, fmt.Errorf("sms688_decode_error: %w", err)
+	}
+	if batch.BatchID == "" {
+		return batch, errors.New("sms688_invalid_response: missing batch_id")
 	}
 	return batch, nil
 }
@@ -76,7 +87,10 @@ func (c *SMS688Client) GetTask(ctx context.Context, batchID string) (RemoteBatch
 		return batch, err
 	}
 	if err := common.Unmarshal(response.body, &batch); err != nil {
-		return batch, errors.New("sms688: invalid task response")
+		return batch, fmt.Errorf("sms688_decode_error: %w", err)
+	}
+	if batch.BatchID == "" {
+		return batch, errors.New("sms688_invalid_response: missing batch_id")
 	}
 	return batch, nil
 }
@@ -103,18 +117,18 @@ func (c *SMS688Client) DownloadCPA(ctx context.Context, batchID string) (Downloa
 
 func (c *SMS688Client) taskPath(batchID string, suffix string) (string, error) {
 	if batchID == "" {
-		return "", errors.New("sms688: batch ID is required")
+		return "", errors.New("sms688_invalid_request: batch ID is required")
 	}
 	return sms688TasksPath + "/" + url.PathEscape(batchID) + suffix, nil
 }
 
 func (c *SMS688Client) newRequest(ctx context.Context, method string, path string, body io.Reader) (*http.Request, error) {
 	if c == nil || c.httpClient == nil || c.baseURL == "" {
-		return nil, errors.New("sms688: client is not configured")
+		return nil, errors.New("sms688_invalid_request: client is not configured")
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
-		return nil, errors.New("sms688: create HTTP request")
+		return nil, fmt.Errorf("sms688_encode_request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	return req, nil
@@ -129,7 +143,7 @@ func (c *SMS688Client) do(req *http.Request) (sms688Response, error) {
 	var result sms688Response
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return result, errors.New("sms688: HTTP request failed")
+		return result, fmt.Errorf("sms688_transport_error: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -138,7 +152,7 @@ func (c *SMS688Client) do(req *http.Request) (sms688Response, error) {
 		return result, err
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return result, fmt.Errorf("sms688: unexpected HTTP status %d", resp.StatusCode)
+		return result, fmt.Errorf("sms688_http_error: unexpected HTTP status %d", resp.StatusCode)
 	}
 	return sms688Response{
 		contentType: resp.Header.Get("Content-Type"),
@@ -149,10 +163,10 @@ func (c *SMS688Client) do(req *http.Request) (sms688Response, error) {
 func readLimited(reader io.Reader, limit int64) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
-		return nil, errors.New("sms688: read response")
+		return nil, fmt.Errorf("sms688_read_error: %w", err)
 	}
 	if int64(len(body)) > limit {
-		return nil, errors.New("sms688: response exceeds limit")
+		return nil, errors.New("sms688_response_too_large: response exceeds limit")
 	}
 	return body, nil
 }
