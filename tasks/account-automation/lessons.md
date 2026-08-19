@@ -35,3 +35,14 @@ NEWAPI_USER_ID=... AUTOMATION_ADMIN_TOKEN=... go run ./cmd/account-automation
 - 日志白名单：`batch_id`/`status`/`masked_email`/`channel_id`/`error_class`，测试锁定无敏感泄漏。
 - 覆盖率：internal/accountautomation 85.5%，cmd 装配层 61.7%（run/main 信号装配未单测），`go test -race` 全绿。
 - 全仓存在与本功能无关的既有失败（web/classic/dist 缺失、claude/helper 包），目标包不受影响。
+
+## 端到端冒烟（2026-08-19，已通过）
+
+本地 mock 上游（SMS688 :19001 + NewAPI :19002，单文件标准库脚本）+ 真实进程 + 浏览器表单：
+
+- `/healthz` 200；`/` 页面 200；无认证 POST 401；带 Bearer POST 202。
+- 全链路：submitting → submitted → polling（2 次）→ downloading → processing → NewAPI type57 预检 → PUT 渠道 → 测试 → succeeded → 批次 completed。
+- 幂等键 = 本地批次 ID；`Idempotency-Key` 与 `X-Submission-Token` 同值。
+- 浏览器表单提交、2s 短轮询、提交后清空账号输入、多批次并排渲染（含失败批次的 `error_class` 列）均正常，无 console 错误。
+- 服务端日志泄漏扫描（密码/token/邮箱明文/凭据）0 命中。
+- 冒烟踩坑：发给 SMS688 的 `account_text` 已去掉 `channel_id|` 前缀（每行 `email----password`），写 mock 时不要按带前缀格式解析。
