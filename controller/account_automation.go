@@ -108,16 +108,34 @@ func InitAccountAutomation() {
 		if baseURL == "" {
 			baseURL = accountautomation.DefaultSMS688BaseURL
 		}
+		store := model.NewAccountAutomationJobStore()
 		orchestrator := accountautomation.NewOrchestrator(
-			accountautomation.NewMemoryJobStore(),
+			store,
 			accountautomation.NewSMS688Client(baseURL, apiKey, &http.Client{Timeout: 30 * time.Second}),
 			AccountAutomationChannelService{},
 			accountAutomationLogger{},
 			accountautomation.OrchestratorConfig{},
 		)
 		accountAutomationServer = accountautomation.NewTrustedServer(orchestrator, nil)
+		resumeAccountAutomationJobs(context.Background(), store, orchestrator)
 		common.SysLog("account automation enabled")
 	})
+}
+
+// resumeAccountAutomationJobs restarts orchestration for jobs that were still
+// in flight when the process last stopped.
+func resumeAccountAutomationJobs(ctx context.Context, store *model.AccountAutomationJobStore, orchestrator *accountautomation.Orchestrator) {
+	jobs, err := store.ActiveJobs()
+	if err != nil {
+		common.SysError(fmt.Sprintf("account automation resume failed: %v", err))
+		return
+	}
+	for _, job := range jobs {
+		go orchestrator.Resume(ctx, job)
+	}
+	if len(jobs) > 0 {
+		common.SysLog(fmt.Sprintf("account automation resumed %d active job(s)", len(jobs)))
+	}
 }
 
 // AccountAutomationHandler returns the trusted handler mounted under the

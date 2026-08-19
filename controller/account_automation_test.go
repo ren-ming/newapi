@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/internal/accountautomation"
@@ -19,7 +20,12 @@ func setupAccountAutomationTestDB(t *testing.T) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}))
+	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.AccountAutomationJob{}))
+	// The in-memory database is per-connection: keep a single connection so
+	// every query sees the same schema and rows.
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 	previous := model.DB
 	model.DB = db
 	t.Cleanup(func() { model.DB = previous })
@@ -131,4 +137,69 @@ func TestAccountAutomationChannelServiceTestChannel(t *testing.T) {
 	t.Run("implements orchestrator NewAPIService", func(t *testing.T) {
 		var _ accountautomation.NewAPIService = AccountAutomationChannelService{}
 	})
+}
+
+type resumeFakeSMS688 struct {
+	createCalled atomic.Bool
+	pollDone     atomic.Bool
+}
+
+func (f *resumeFakeSMS688) CreateTask(context.Context, accountautomation.SMS688CreateRequest, string) (accountautomation.RemoteBatch, error) {
+	f.createCalled.Store(true)
+	return accountautomation.RemoteBatch{BatchID: "remote-resume"}, nil
+}
+
+func (f *resumeFakeSMS688) GetTask(_ context.Context, _ string) (accountautomation.RemoteBatch, error) {
+	f.pollDone.Store(true)
+	return accountautomation.RemoteBatch{
+		BatchID:     "remote-resume",
+		AllFinished: true,
+		Complete:    1,
+		Jobs:        []accountautomation.RemoteJob{{ID: "job-1", Email: "user@example.com", Status: "completed"}},
+	}, nil
+}
+
+func (f *resumeFakeSMS688) DownloadCPA(_ context.Context, _ string) (accountautomation.DownloadedCPA, error) {
+	data, err := common.Marshal(accountautomation.Credential{AccessToken: "at-1", AccountID: "aid-1", Email: "user@example.com"})
+	if err != nil {
+		return accountautomation.DownloadedCPA{}, err
+	}
+	return accountautomation.DownloadedCPA{ContentType: "application/json", Data: data}, nil
+}
+
+func TestAccountAutomationResumeOnBoot(t *testing.T) {
+	setupAccountAutomationTestDB(t)
+	stubChannelTestResult(t, testResult{})
+	store := model.NewAccountAutomationJobStore()
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateJob(accountautomation.Job{
+		ID:            "job-boot",
+		AccountMode:   accountautomation.AccountModeMicrosoft,
+		MaskedEmail:   "u***r@example.com",
+		ChannelID:     createAccountAutomationChannel(t, 57),
+		Status:        accountautomation.JobStatusSMS688Running,
+		SMS688BatchID: "remote-resume",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}))
+
+	sms := &resumeFakeSMS688{}
+	orchestrator := accountautomation.NewOrchestrator(store, sms, AccountAutomationChannelService{}, accountAutomationLogger{}, accountautomation.OrchestratorConfig{
+		PollInterval:  time.Millisecond,
+		BatchDeadline: time.Minute,
+	})
+	resumeAccountAutomationJobs(context.Background(), store, orchestrator)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		job, err := store.GetJob("job-boot")
+		require.NoError(t, err)
+		if accountautomation.IsTerminalJobStatus(job.Status) {
+			assert.Equal(t, accountautomation.JobStatusSucceeded, job.Status)
+			assert.False(t, sms.createCalled.Load(), "resume must not re-submit to SMS688")
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatal("resumed job did not reach terminal status")
 }
