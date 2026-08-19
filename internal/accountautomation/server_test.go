@@ -63,7 +63,7 @@ func TestServerRequiresExactBearerTokenForAPI(t *testing.T) {
 	handler := NewServer(&stubBatchService{}, "secret", nil)
 
 	for _, authorization := range []string{"", "secret", "Bearer wrong", "bearer secret", "Bearer secret extra"} {
-		request := httptest.NewRequest(http.MethodGet, "/api/batches", nil)
+		request := httptest.NewRequest(http.MethodGet, "/batches", nil)
 		request.Header.Set("Authorization", authorization)
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
@@ -81,7 +81,7 @@ func TestServerBatchEndpoints(t *testing.T) {
 	handler := NewServer(service, "secret", nil)
 
 	t.Run("submit", func(t *testing.T) {
-		request := authenticatedRequest(http.MethodPost, "/api/batches", `{"account_text":"12|a@example.com----password","bind_free":true}`)
+		request := authenticatedRequest(http.MethodPost, "/batches", `{"account_text":"12|a@example.com----password","bind_free":true}`)
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
 
@@ -93,19 +93,19 @@ func TestServerBatchEndpoints(t *testing.T) {
 	})
 
 	t.Run("list", func(t *testing.T) {
-		response := serveAuthenticated(handler, http.MethodGet, "/api/batches", "")
+		response := serveAuthenticated(handler, http.MethodGet, "/batches", "")
 		assert.Equal(t, http.StatusOK, response.Code)
 		assert.Contains(t, response.Body.String(), `"id":"batch-1"`)
 	})
 
 	t.Run("get", func(t *testing.T) {
-		response := serveAuthenticated(handler, http.MethodGet, "/api/batches/batch-1", "")
+		response := serveAuthenticated(handler, http.MethodGet, "/batches/batch-1", "")
 		assert.Equal(t, http.StatusOK, response.Code)
 		assert.Contains(t, response.Body.String(), `"id":"batch-1"`)
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		response := serveAuthenticated(handler, http.MethodGet, "/api/batches/missing", "")
+		response := serveAuthenticated(handler, http.MethodGet, "/batches/missing", "")
 		assert.Equal(t, http.StatusNotFound, response.Code)
 	})
 }
@@ -115,23 +115,23 @@ func TestServerRejectsInvalidAndOversizedRequests(t *testing.T) {
 	handler := NewServer(service, "secret", nil)
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		response := serveAuthenticated(handler, http.MethodPost, "/api/batches", "{")
+		response := serveAuthenticated(handler, http.MethodPost, "/batches", "{")
 		assert.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
 	t.Run("service validation", func(t *testing.T) {
-		response := serveAuthenticated(handler, http.MethodPost, "/api/batches", `{"account_text":""}`)
+		response := serveAuthenticated(handler, http.MethodPost, "/batches", `{"account_text":""}`)
 		assert.Equal(t, http.StatusBadRequest, response.Code)
 		assert.Contains(t, response.Body.String(), "empty_batch")
 	})
 
 	t.Run("too large", func(t *testing.T) {
-		response := serveAuthenticated(handler, http.MethodPost, "/api/batches", `{"account_text":"`+strings.Repeat("x", int(maxRequestBodyBytes))+`"}`)
+		response := serveAuthenticated(handler, http.MethodPost, "/batches", `{"account_text":"`+strings.Repeat("x", int(maxRequestBodyBytes))+`"}`)
 		assert.Equal(t, http.StatusRequestEntityTooLarge, response.Code)
 	})
 
 	t.Run("wrong method", func(t *testing.T) {
-		response := serveAuthenticated(handler, http.MethodPut, "/api/batches", "")
+		response := serveAuthenticated(handler, http.MethodPut, "/batches", "")
 		assert.Equal(t, http.StatusMethodNotAllowed, response.Code)
 	})
 }
@@ -165,4 +165,33 @@ func serveAuthenticated(handler http.Handler, method, path, body string) *httpte
 
 func TestNewServerRejectsEmptyAdminToken(t *testing.T) {
 	require.Panics(t, func() { NewServer(&stubBatchService{}, "", nil) })
+}
+
+func TestNewTrustedServerServesAPIWithoutBearer(t *testing.T) {
+	now := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
+	batch := Batch{ID: "batch-1", Status: BatchStatusCreated, CreatedAt: now, UpdatedAt: now}
+	service := &stubBatchService{submitBatch: batch, batches: []Batch{batch}, batch: batch, found: true}
+	handler := NewTrustedServer(service, nil)
+
+	t.Run("list without authorization header", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/batches", nil))
+		assert.Equal(t, http.StatusOK, response.Code)
+		assert.Contains(t, response.Body.String(), `"id":"batch-1"`)
+		assert.Empty(t, response.Header().Get("WWW-Authenticate"))
+	})
+
+	t.Run("get without authorization header", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/batches/batch-1", nil))
+		assert.Equal(t, http.StatusOK, response.Code)
+	})
+
+	t.Run("still rejects unknown paths", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/unknown", nil))
+		assert.Equal(t, http.StatusNotFound, response.Code)
+	})
+
+	require.Panics(t, func() { NewTrustedServer(nil, nil) })
 }

@@ -34,6 +34,18 @@ func NewServer(service BatchService, adminToken string, logger ServerLogger) htt
 	return http.HandlerFunc(server.serveHTTP)
 }
 
+// NewTrustedServer serves the same routes as NewServer but skips Bearer
+// authentication: it must only be mounted behind a host that authenticates
+// requests itself (e.g. the new-api admin middleware in front of
+// /api/account-automation).
+func NewTrustedServer(service BatchService, logger ServerLogger) http.Handler {
+	if service == nil {
+		panic("accountautomation: service is required")
+	}
+	server := &server{service: service, logger: logger}
+	return http.HandlerFunc(server.serveHTTP)
+}
+
 type server struct {
 	service    BatchService
 	adminToken string
@@ -46,7 +58,7 @@ func (s *server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		s.health(w, r)
 	case r.URL.Path == "/":
 		s.index(w, r)
-	case strings.HasPrefix(r.URL.Path, "/api/batches"):
+	case strings.HasPrefix(r.URL.Path, "/batches"):
 		s.apiBatches(w, r)
 	default:
 		http.NotFound(w, r)
@@ -84,12 +96,12 @@ func (s *server) apiBatches(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if r.URL.Path == "/api/batches" {
+	if r.URL.Path == "/batches" {
 		s.collection(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/batches/") && r.Method == http.MethodGet {
-		id := strings.TrimPrefix(r.URL.Path, "/api/batches/")
+	if strings.HasPrefix(r.URL.Path, "/batches/") && r.Method == http.MethodGet {
+		id := strings.TrimPrefix(r.URL.Path, "/batches/")
 		if id == "" || strings.Contains(id, "/") {
 			http.NotFound(w, r)
 			return
@@ -139,6 +151,10 @@ func (s *server) collection(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) authorized(r *http.Request) bool {
+	// Trusted mode (NewTrustedServer): the hosting process authenticates.
+	if s.adminToken == "" {
+		return true
+	}
 	value := r.Header.Get("Authorization")
 	if !strings.HasPrefix(value, "Bearer ") || strings.Count(value, " ") != 1 {
 		return false

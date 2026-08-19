@@ -97,6 +97,10 @@ func main() {
 		go model.SyncChannelCache(common.SyncFrequency)
 	}
 
+	// SMS688→NewAPI 账号自动化：配置了 SMS688_ACCOUNT_API_KEY 才挂载路由
+	// （必须在 SetRouter 之前完成装配）。
+	controller.InitAccountAutomation()
+
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 

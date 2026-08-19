@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultSMS688BaseURL = "https://cdk.sms688.cc"
+	defaultSMS688BaseURL = accountautomation.DefaultSMS688BaseURL
 	defaultListenAddr    = ":8080"
 	defaultHTTPTimeout   = 30 * time.Second
 	defaultPollInterval  = 2 * time.Second
@@ -116,7 +116,13 @@ func wire(cfg config) http.Handler {
 		BatchDeadline: defaultBatchDeadline,
 		MaxBatchSize:  cfg.MaxBatchSize,
 	})
-	return accountautomation.NewServer(orchestrator, cfg.AdminToken, nil)
+	handler := accountautomation.NewServer(orchestrator, cfg.AdminToken, nil)
+	// The handler serves "/", "/healthz" and "/batches"; keep the standalone
+	// deployment's historical /api/batches URL working via a stripped mux.
+	mux := http.NewServeMux()
+	mux.Handle("/api/", http.StripPrefix("/api", handler))
+	mux.Handle("/", handler)
+	return mux
 }
 
 func loadConfig(lookup lookupEnv) (config, error) {

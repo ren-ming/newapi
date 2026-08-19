@@ -1,6 +1,8 @@
 package router
 
 import (
+	"net/http"
+
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
 
@@ -260,6 +262,13 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.POST("/upstream_updates/apply_all", controller.ApplyAllChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect", controller.DetectChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect_all", controller.DetectAllChannelUpstreamModelUpdates)
+		}
+		// SMS688→NewAPI 账号自动化：认证复用 AdminAuth，只有
+		// SMS688_ACCOUNT_API_KEY 配置时才挂载（handler 为 nil 时跳过）。
+		if automationHandler := controller.AccountAutomationHandler(); automationHandler != nil {
+			automationRoute := apiRouter.Group("/account-automation")
+			automationRoute.Use(middleware.AdminAuth())
+			automationRoute.Any("/*any", gin.WrapH(http.StripPrefix("/api/account-automation", automationHandler)))
 		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())

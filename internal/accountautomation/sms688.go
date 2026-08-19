@@ -15,6 +15,9 @@ import (
 
 const SMS688MaxResponseBytes = 8 << 20
 
+// DefaultSMS688BaseURL is the shared default for SMS688_BASE_URL overrides.
+const DefaultSMS688BaseURL = "https://cdk.sms688.cc"
+
 const sms688TasksPath = "/api/v1/tasks"
 
 type SMS688Client struct {

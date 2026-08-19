@@ -57,3 +57,18 @@ NEWAPI_USER_ID=... AUTOMATION_ADMIN_TOKEN=... go run ./cmd/account-automation
 4. **2xx 契约校验**：CreateTask/GetTask 校验 `batch_id` 非空，否则 `sms688_invalid_response`——防 `{}` 响应静默零值导致轮询空转到 45 分钟超时。
 
 接受不修（已评审）：CreateTask 无重试、DownloadCPA 不校验 Content-Type、先读满再判状态码、readLimited 与 newapi.go 守卫重复、nil httpClient 回退 DefaultClient（当前接线不可达）。
+
+## 合并进 new-api 主程序（2026-08-19，commit 见 git log）
+
+架构：独立 systemd 服务 → new-api 内置功能。后端 `/api/account-automation` 挂 admin 组（AdminAuth+gin.WrapH），`controller.AccountAutomationChannelService` 内部直调 model 层取代 HTTP 自调用；前端 React 页面挂后台菜单。经验：
+
+1. **trusted 模式而非免认证**：`NewTrustedServer` 复用同一 server 逻辑但 `adminToken == ""` 时跳过 Bearer 检查——外层 AdminAuth 已认证；独立部署 `NewServer` 仍强制 token，两种模式共用全部测试。
+2. **路径前缀要去掉**：gin 组 `Any("/*any", gin.WrapH(http.StripPrefix("/api/account-automation", handler)))`，server 内部路由从 `/batches` 起匹配；独立部署用 mux 反向加回 `/api` 前缀保持 URL 兼容。
+3. **错误类名沿用 HTTP 版前缀**（`newapi_channel_not_found` 等）：orchestrator 的 errorClass 按首冒号截断，内部直调实现必须产出同名类，日志统计才连续。
+4. **内部直调比 HTTP 少一层坑**：testChannel 直接收 `*model.Channel`（自建 `gin.CreateTestContext(httptest.NewRecorder())`），成功判定 `result.localErr == nil`；不用管 session/New-Api-User 头。
+5. **渠道更新落库三步缺一不可**：`channel.Update()` → `model.InitChannelCache()` → `service.ResetProxyClientCache()`，否则 relay 层仍用旧密钥。
+6. **测试 seam 用包级函数变量**：`var accountAutomationRunChannelTest = testChannel`，测试注入 stub；sqlite in-memory（glebarez）AutoMigrate Channel/Ability + 临时替换 model.DB + t.Cleanup 恢复。
+7. **TanStack Router 路由文件必须先 build**：`routeTree.gen.ts` 由 rsbuild 插件生成，`bunx tsr generate` 在 node 25 上跑不动；新增 `routes/_authenticated/account-automation/index.tsx` 后先 `bun run build` 再 typecheck。
+8. **权限守卫抄现有路由**：`beforeLoad` 里 `auth.user.role < ROLE.ADMIN → redirect /403`，与 channels 页一致（不是跳登录页）。
+9. **挂载条件化**：`SMS688_ACCOUNT_API_KEY` 未设时 `AccountAutomationHandler()` 返回 nil、路由不挂载（API 404），启动日志 `account automation disabled`；必须在 `SetApiRouter` 之前调 `InitAccountAutomation()`（main.go）。
+10. **部署切换顺序**：先给 new-api 容器加 env（override）并 up → 验证 401/菜单 → 再停 systemd + 删 env 文件；反序会出现功能空窗。

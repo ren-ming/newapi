@@ -4476,6 +4476,15 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Account Automation": "账号自动化",
+    "Submit account lines as channel_id|email----password; CPA credentials are written into the Codex channel automatically": "提交 渠道ID|邮箱----密码 格式账号行，CPA 凭据自动写入 Codex 渠道",
+    "Submit accounts": "提交账号",
+    "One account per line, format: channel_id|email----password": "每行一个账号，格式：渠道ID|邮箱----密码",
+    "Bind free plan": "绑定免费计划",
+    "Batch submitted": "批次已提交",
+    "Batches": "批次列表",
+    "Auto-refreshes every 2 seconds": "每 2 秒自动刷新",
+    "No batches yet": "暂无批次"
   }
 }
