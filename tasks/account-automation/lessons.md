@@ -72,3 +72,15 @@ NEWAPI_USER_ID=... AUTOMATION_ADMIN_TOKEN=... go run ./cmd/account-automation
 8. **权限守卫抄现有路由**：`beforeLoad` 里 `auth.user.role < ROLE.ADMIN → redirect /403`，与 channels 页一致（不是跳登录页）。
 9. **挂载条件化**：`SMS688_ACCOUNT_API_KEY` 未设时 `AccountAutomationHandler()` 返回 nil、路由不挂载（API 404），启动日志 `account automation disabled`；必须在 `SetApiRouter` 之前调 `InitAccountAutomation()`（main.go）。
 10. **部署切换顺序**：先给 new-api 容器加 env（override）并 up → 验证 401/菜单 → 再停 systemd + 删 env 文件；反序会出现功能空窗。
+
+## v2 单账号记录制（2026-08-19，本分支 5 提交）
+
+批次概念整体删除，每次提交 = 一个账号 = 一条 `account_automation_jobs` 记录（永久落库）。经验：
+
+1. **大切换一步到位**：Task 1 只新增 Job 类型/校验/MemoryJobStore 保编译（旧 Batch 并存），Task 2/3 一次性切 orchestrator+server 并删光旧代码——两套管线长期并存只会让 store 接口打架。
+2. **Resume 必须从 store 重读快照**：调用方传入的 Job 可能陈旧（测试里 CreatedAt 零值直接误判超时）；`Resume` 先 `store.GetJob(id)` 拿权威状态再分流（终态 return / 无 batchID → submit_failed(interrupted) / 超时 → sms688_failed(interrupted) / 否则续轮询且 `Idempotency-Key` 置空防重复提交）。
+3. **凭据匹配只用 masked email**：账号原文不落库（只存 `masked_email`），CPA 下载后按归一化 email 匹配再比对 mask；歧义/缺失 → `credential_invalid`，绝不按顺序猜。
+4. **sqlite :memory: 每连接独立库**：glebarez 驱动下 GORM 连接池多连接互相看不到表；测试必须 `sqlDB.SetMaxOpenConns(1)`（model 与 controller 两处同坑）。
+5. **前端复用 channels API**：`getChannels({ type: 57, page_size: 100 })` 直接过滤 Codex 渠道，显示 `名称 (#ID)`；zh.json 尾部追加式 key 块与 v1 先例一致，roundtrip 重排会产生整文件 diff，用 Edit 精准替换。
+6. **会话隔离在 worktree 时主 checkout 不可操作**：hook 拒绝 `cd`/`git -C` 指向主工作区；合并 main 需用户执行或退出 worktree 会话。构建镜像可直接从 worktree 跑（buildx context 一次性传输），前提是核对 worktree HEAD 包含 origin/main 全部提交。
+
