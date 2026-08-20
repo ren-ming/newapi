@@ -189,6 +189,10 @@ func (o *Orchestrator) pollJob(ctx context.Context, job Job) (RemoteJob, bool) {
 			return RemoteJob{}, false
 		}
 		remoteJob, found := remoteJobByMaskedEmail(remote.Jobs, job.MaskedEmail)
+		if !found && remote.AllFinished && remote.Total == 1 && remote.Complete == 1 {
+			remoteJob = RemoteJob{Status: "completed"}
+			found = true
+		}
 		if found {
 			o.setJob(job.ID, mapRemoteJobStatus(remoteJob.Status), remoteJob.Stage, job.SMS688BatchID)
 		}

@@ -143,6 +143,31 @@ func TestOrchestratorSubmitJobMarksSubmitFailure(t *testing.T) {
 	}
 }
 
+func TestOrchestratorAcceptsCompletedSingleAccountBatchWithoutJobs(t *testing.T) {
+	t.Parallel()
+	store := NewMemoryJobStore()
+	sms := &fakeSMS688{
+		createResult: RemoteBatch{BatchID: "remote-1"},
+		pollResults:  []RemoteBatch{{BatchID: "remote-1", AllFinished: true, Total: 1, Complete: 1, Status: "complete"}},
+		download:     jsonCPA(t, Credential{AccessToken: "access-1", AccountID: "account-1", Email: "user@example.com"}),
+	}
+	newAPI := &fakeNewAPI{testResults: map[int]ChannelTestResult{42: {Success: true}}}
+	o := NewOrchestrator(store, sms, newAPI, discardLogger{}, OrchestratorConfig{PollInterval: time.Millisecond, BatchDeadline: time.Second})
+
+	created, err := o.SubmitJob(context.Background(), CreateJobRequest{
+		AccountMode: AccountModeMicrosoft,
+		AccountText: "user@example.com----secret",
+		ChannelID:   42,
+	})
+	if err != nil {
+		t.Fatalf("SubmitJob() error = %v", err)
+	}
+	done := waitForTerminalJob(t, store, created.ID)
+	if done.Status != JobStatusSucceeded {
+		t.Fatalf("terminal job = %#v, want succeeded", done)
+	}
+}
+
 func TestOrchestratorJobFailureClassification(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

@@ -89,13 +89,16 @@ func (c *SMS688Client) GetTask(ctx context.Context, batchID string) (RemoteBatch
 	if err != nil {
 		return batch, err
 	}
-	if err := common.Unmarshal(response.body, &batch); err != nil {
+	var envelope remoteBatchEnvelope
+	if err := common.Unmarshal(response.body, &envelope); err != nil {
 		return batch, fmt.Errorf("sms688_decode_error: %w", err)
 	}
-	if batch.BatchID == "" {
-		return batch, errors.New("sms688_invalid_response: missing batch_id")
+	for _, candidate := range envelope.Batches {
+		if candidate.BatchID == batchID {
+			return candidate, nil
+		}
 	}
-	return batch, nil
+	return batch, errors.New("sms688_invalid_response: missing batch_id")
 }
 
 func (c *SMS688Client) DownloadCPA(ctx context.Context, batchID string) (DownloadedCPA, error) {

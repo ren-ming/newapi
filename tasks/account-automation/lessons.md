@@ -84,3 +84,11 @@ NEWAPI_USER_ID=... AUTOMATION_ADMIN_TOKEN=... go run ./cmd/account-automation
 5. **前端复用 channels API**：`getChannels({ type: 57, page_size: 100 })` 直接过滤 Codex 渠道，显示 `名称 (#ID)`；zh.json 尾部追加式 key 块与 v1 先例一致，roundtrip 重排会产生整文件 diff，用 Edit 精准替换。
 6. **会话隔离在 worktree 时主 checkout 不可操作**：hook 拒绝 `cd`/`git -C` 指向主工作区；合并 main 需用户执行或退出 worktree 会话。构建镜像可直接从 worktree 跑（buildx context 一次性传输），前提是核对 worktree HEAD 包含 origin/main 全部提交。
 
+## SMS688 真实查询契约修复（2026-08-20）
+
+1. **创建与查询响应不是同一结构**：POST 创建响应是扁平批次；GET `/api/v1/tasks/{batch_id}` 返回 `{"batches":[...]}`。测试必须使用脱敏后的真实响应形态，不能让 mock 沿用错误假设。
+2. **查询结果必须按 Batch ID 精确选择**：响应可能包含多个批次，禁止默认使用 `batches[0]`；目标批次缺失时返回稳定的 `sms688_invalid_response`。
+3. **真实批次汇总可能没有 `jobs`**：单账号模式仅在 `all_finished=true && total=1 && complete=1` 时推导账号成功；其他无账号详情场景继续失败，不能猜测归属或状态。
+4. **凭据归属仍由 CPA email 验证**：批次完成推导只推进到 CPA 下载，最终凭据仍按 masked email 唯一匹配；缺失、冲突或不匹配均为 `credential_invalid`。
+5. **恢复必须复用已保存 Batch ID**：解析或轮询失败的本地 Job 不得重新 POST；恢复后只查询原批次、下载 CPA、更新并测试渠道。
+

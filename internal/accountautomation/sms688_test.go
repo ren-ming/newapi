@@ -57,7 +57,7 @@ func TestSMS688ClientGetTask(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertRequest(t, r, http.MethodGet, "/api/v1/tasks/batch-1", "key")
-		_, _ = io.WriteString(w, `{"batch_id":"batch-1","all_finished":true,"total":5,"complete":2,"error":1,"cancelled":1,"expired":1,"jobs":[]}`)
+		_, _ = io.WriteString(w, `{"batches":[{"batch_id":"batch-1","all_finished":true,"total":5,"complete":2,"error":1,"cancelled":1,"expired":1,"status":"complete"}]}`)
 	}))
 	defer server.Close()
 
@@ -67,6 +67,35 @@ func TestSMS688ClientGetTask(t *testing.T) {
 	}
 	if !got.AllFinished || got.Total != 5 || got.Complete != 2 || got.Error != 1 || got.Cancelled != 1 || got.Expired != 1 {
 		t.Fatalf("response = %#v", got)
+	}
+}
+
+func TestSMS688ClientGetTaskSelectsRequestedBatch(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"batches":[{"batch_id":"other","all_finished":true},{"batch_id":"batch-1","all_finished":true,"total":1,"complete":1}]}`)
+	}))
+	defer server.Close()
+
+	got, err := NewSMS688Client(server.URL, "key", server.Client()).GetTask(context.Background(), "batch-1")
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+	if got.BatchID != "batch-1" || got.Total != 1 || got.Complete != 1 {
+		t.Fatalf("response = %#v", got)
+	}
+}
+
+func TestSMS688ClientGetTaskRejectsMissingRequestedBatch(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"batches":[{"batch_id":"other"}]}`)
+	}))
+	defer server.Close()
+
+	_, err := NewSMS688Client(server.URL, "key", server.Client()).GetTask(context.Background(), "batch-1")
+	if err == nil || !strings.HasPrefix(err.Error(), "sms688_invalid_response:") {
+		t.Fatalf("error = %v", err)
 	}
 }
 

@@ -32,7 +32,12 @@ type RemoteBatch struct {
 	Error       int         `json:"error"`
 	Cancelled   int         `json:"cancelled"`
 	Expired     int         `json:"expired"`
+	Status      string      `json:"status"`
 	Jobs        []RemoteJob `json:"jobs"`
+}
+
+type remoteBatchEnvelope struct {
+	Batches []RemoteBatch `json:"batches"`
 }
 
 type RemoteJob struct {
