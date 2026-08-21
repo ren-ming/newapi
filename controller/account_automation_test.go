@@ -125,6 +125,20 @@ func TestAccountAutomationChannelServiceTestChannel(t *testing.T) {
 		assert.True(t, result.Success)
 	})
 
+	t.Run("passing test keeps disabled channel disabled", func(t *testing.T) {
+		stubChannelTestResult(t, testResult{})
+		id := createAccountAutomationChannel(t, 57)
+		require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", id).
+			Update("status", common.ChannelStatusManuallyDisabled).Error)
+		result, err := service.TestChannel(ctx, id)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+		stored, getErr := model.GetChannelById(id, true)
+		require.NoError(t, getErr)
+		assert.Equal(t, common.ChannelStatusManuallyDisabled, stored.Status,
+			"a successful test must not auto-enable the channel")
+	})
+
 	t.Run("failing test reports failure without transport error", func(t *testing.T) {
 		stubChannelTestResult(t, testResult{localErr: fmt.Errorf("upstream 401")})
 		id := createAccountAutomationChannel(t, 57)

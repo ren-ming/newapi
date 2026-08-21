@@ -92,3 +92,12 @@ NEWAPI_USER_ID=... AUTOMATION_ADMIN_TOKEN=... go run ./cmd/account-automation
 4. **凭据归属仍由 CPA email 验证**：批次完成推导只推进到 CPA 下载，最终凭据仍按 masked email 唯一匹配；缺失、冲突或不匹配均为 `credential_invalid`。
 5. **恢复必须复用已保存 Batch ID**：解析或轮询失败的本地 Job 不得重新 POST；恢复后只查询原批次、下载 CPA、更新并测试渠道。
 
+## Codex 渠道测试 channel_test_failed 根因（2026-08-21）
+
+生产现象：SMS688 任务成功、CPA 下载匹配成功、渠道更新成功，但本地 Job 报 `channel_test_failed`。根因与修复：
+
+1. **根因是测试请求 `stream=false`**：`AccountAutomationChannelService.TestChannel` 调 `accountAutomationRunChannelTest(channel, "", "", false)`，`buildTestRequest` 的 Responses 分支把 `isStream` 原样写入 `Stream`；Codex 上游（chatgpt 后端）强制要求 `stream=true`，返回 `HTTP 400: Stream must be set to true`。
+2. **协议兜底放在构造器，不放调用方**：修复在 `buildTestRequest` 的 `EndpointTypeOpenAIResponse` 分支做 `isStream || channel.Type == ChannelTypeCodex`，而不是改自动化入口传 `true`——`testAllChannels` 自动测试等其他入口同样受益，不会各自漏传。
+3. **测试成功 ≠ 渠道启用**：`TestChannel` 成功只把 Job 置 `succeeded`，不写 `channel.Status`；disabled 渠道测试成功后保持 disabled。用回归测试固化该语义，防止未来有人"顺手"加自动启用。
+4. **同文件多处相同代码必须带分支上下文做 Edit**：`Stream: lo.ToPtr(isStream)` 在 channel-test.go 出现 4 次（Responses 分支、codex 模型名兜底、两个 chat 分支），裸串替换会命中多处失败；用 `case constant.EndpointTypeOpenAIResponse` 整段做锚点。
+

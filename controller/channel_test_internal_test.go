@@ -5,13 +5,25 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBuildTestRequestCodexForcesStream(t *testing.T) {
+	channel := &model.Channel{Type: constant.ChannelTypeCodex}
+
+	request := buildTestRequest("gpt-5", string(constant.EndpointTypeOpenAIResponse), channel, false)
+	responsesRequest, ok := request.(*dto.OpenAIResponsesRequest)
+	require.True(t, ok)
+	require.NotNil(t, responsesRequest.Stream)
+	require.True(t, *responsesRequest.Stream)
+}
 
 func TestSettleTestQuotaUsesTieredBilling(t *testing.T) {
 	info := &relaycommon.RelayInfo{

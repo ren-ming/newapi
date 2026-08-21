@@ -708,11 +708,11 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 				TopN:      lo.ToPtr(2),
 			}
 		case constant.EndpointTypeOpenAIResponse:
-			// 返回 OpenAIResponsesRequest
+			// 返回 OpenAIResponsesRequest;Codex 上游要求 stream 必须为 true
 			return &dto.OpenAIResponsesRequest{
 				Model:  model,
 				Input:  json.RawMessage(`[{"role":"user","content":"hi"}]`),
-				Stream: lo.ToPtr(isStream),
+				Stream: lo.ToPtr(isStream || (channel != nil && channel.Type == constant.ChannelTypeCodex)),
 			}
 		case constant.EndpointTypeOpenAIResponseCompact:
 			// 返回 OpenAIResponsesCompactionRequest
