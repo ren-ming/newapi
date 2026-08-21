@@ -73,6 +73,16 @@ func (AccountAutomationChannelService) TestChannel(_ context.Context, channelID 
 	if result.localErr != nil {
 		return accountautomation.ChannelTestResult{Success: false, Message: result.localErr.Error()}, nil
 	}
+	// A passing test proves the refreshed credential works: enable a disabled
+	// channel so it can serve traffic immediately.
+	if channel.Status != common.ChannelStatusEnabled {
+		channel.Status = common.ChannelStatusEnabled
+		if err := channel.Update(); err != nil {
+			return accountautomation.ChannelTestResult{}, fmt.Errorf("newapi_channel_enable_failed: %w", err)
+		}
+		model.InitChannelCache()
+		service.ResetProxyClientCache()
+	}
 	return accountautomation.ChannelTestResult{Success: true}, nil
 }
 

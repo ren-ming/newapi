@@ -166,7 +166,11 @@ func (o *Orchestrator) runJob(ctx context.Context, job Job, accountLine string) 
 	}
 	o.setJob(job.ID, JobStatusTesting, "", job.SMS688BatchID)
 	result, err := o.newAPI.TestChannel(ctx, job.ChannelID)
-	if err != nil || !result.Success {
+	if err != nil {
+		o.failJob(job, JobStatusChannelTestFailed, errorClass(err, "channel_test_failed"))
+		return
+	}
+	if !result.Success {
 		o.failJob(job, JobStatusChannelTestFailed, "channel_test_failed")
 		return
 	}
