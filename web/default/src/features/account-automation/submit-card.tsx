@@ -58,8 +58,16 @@ interface DraftRow {
   channelId: number | ''
 }
 
+/**
+ * Row IDs only address rows in React state, so plain randomness is fine —
+ * and unlike crypto.randomUUID() this works on insecure origins (the panel
+ * is still served over plain HTTP).
+ */
+const newRowId = (): string =>
+  `row-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+
 const emptyDraft = (): DraftRow => ({
-  id: crypto.randomUUID(),
+  id: newRowId(),
   accountMode: 'microsoft',
   accountText: '',
   channelId: '',
