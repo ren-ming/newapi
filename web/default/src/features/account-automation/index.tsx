@@ -16,14 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { getChannels } from '@/features/channels/api'
 import type { Channel } from '@/features/channels/types'
 import { SectionPageLayout } from '@/components/layout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -39,6 +40,12 @@ import {
   NativeSelectOption,
 } from '@/components/ui/native-select'
 import { Spinner } from '@/components/ui/spinner'
+import { DetailStepper, MiniStepper } from './stepper'
+import {
+  deriveSteps,
+  ERROR_MESSAGE_KEYS,
+  STATUS_LABEL_KEYS,
+} from './steps'
 
 const PAGE_SIZE = 20
 const CODEX_CHANNEL_TYPE = 57
@@ -62,6 +69,7 @@ interface AutomationJob {
   status: string
   stage?: string
   error_class?: string
+  sms688_batch_id?: string
   created_at: string
   updated_at: string
 }
@@ -71,20 +79,10 @@ interface JobListResponse {
   total: number
 }
 
-const statusTone = (status: string): 'secondary' | 'destructive' | 'default' => {
-  if (status === 'succeeded') {
-    return 'secondary'
-  }
-  if (
-    status.includes('failed') ||
-    status.includes('invalid') ||
-    status.includes('expired') ||
-    status.includes('cancelled')
-  ) {
-    return 'destructive'
-  }
-  return 'default'
-}
+const errorText = (job: AutomationJob): string =>
+  job.error_class
+    ? ERROR_MESSAGE_KEYS[job.error_class] ?? job.error_class
+    : ''
 
 const formatTime = (value: string): string => {
   const date = new Date(value)
@@ -107,6 +105,10 @@ function AccountAutomationContent() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const toggleExpanded = (id: string) =>
+    setExpandedId((current) => (current === id ? null : id))
 
   const loadChannels = useCallback(async () => {
     try {
@@ -315,42 +317,111 @@ function AccountAutomationContent() {
                 <table className='w-full text-sm'>
                   <thead>
                     <tr className='text-muted-foreground border-b text-left text-xs'>
+                      <th className='w-8 px-3 py-2' aria-label={t('Details')} />
                       <th className='px-3 py-2'>{t('Time')}</th>
                       <th className='px-3 py-2'>{t('Type')}</th>
                       <th className='px-3 py-2'>{t('Account')}</th>
                       <th className='px-3 py-2'>{t('Channel')}</th>
-                      <th className='px-3 py-2'>{t('Status')}</th>
+                      <th className='px-3 py-2'>{t('Pipeline')}</th>
                       <th className='px-3 py-2'>{t('Error')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {jobs.map((job) => (
-                      <tr key={job.id} className='border-b last:border-b-0'>
-                        <td className='px-3 py-2 whitespace-nowrap'>
-                          {formatTime(job.created_at)}
-                        </td>
-                        <td className='px-3 py-2'>{modeLabel(job.account_mode)}</td>
-                        <td className='px-3 py-2 font-mono text-xs'>
-                          {job.masked_email}
-                        </td>
-                        <td className='px-3 py-2 whitespace-nowrap'>
-                          #{job.channel_id}
-                        </td>
-                        <td className='px-3 py-2'>
-                          <Badge variant={statusTone(job.status)}>
-                            {job.status}
-                          </Badge>
-                        </td>
-                        <td className='px-3 py-2'>
-                          {job.error_class ? (
-                            <span className='text-destructive font-mono text-xs'>
-                              {job.error_class}
-                            </span>
-                          ) : (
-                            <span className='text-muted-foreground'>—</span>
-                          )}
-                        </td>
-                      </tr>
+                      <Fragment key={job.id}>
+                        <tr
+                          className='cursor-pointer border-b last:border-b-0 hover:bg-muted/40'
+                          onClick={() => toggleExpanded(job.id)}
+                        >
+                          <td className='px-3 py-2'>
+                            <ChevronDown
+                              className={cn(
+                                'h-4 w-4 text-muted-foreground transition-transform',
+                                expandedId === job.id && 'rotate-180'
+                              )}
+                            />
+                          </td>
+                          <td className='px-3 py-2 whitespace-nowrap'>
+                            {formatTime(job.created_at)}
+                          </td>
+                          <td className='px-3 py-2'>{modeLabel(job.account_mode)}</td>
+                          <td className='px-3 py-2 font-mono text-xs'>
+                            {job.masked_email}
+                          </td>
+                          <td className='px-3 py-2 whitespace-nowrap'>
+                            #{job.channel_id}
+                          </td>
+                          <td className='px-3 py-2'>
+                            <div className='flex flex-col gap-1'>
+                              <MiniStepper steps={deriveSteps(job)} />
+                              <span className='text-muted-foreground text-xs'>
+                                {t(
+                                  STATUS_LABEL_KEYS[job.status] ?? job.status
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                          <td
+                            className='text-destructive max-w-48 truncate px-3 py-2 text-xs'
+                            title={errorText(job)}
+                          >
+                            {job.error_class ? (
+                              <span className='text-destructive'>
+                                {errorText(job)}
+                              </span>
+                            ) : (
+                              <span className='text-muted-foreground'>—</span>
+                            )}
+                          </td>
+                        </tr>
+                        {expandedId === job.id ? (
+                          <tr className='border-b last:border-b-0'>
+                            <td colSpan={7} className='bg-muted/20 px-4 py-4'>
+                              <div className='space-y-4'>
+                                <DetailStepper steps={deriveSteps(job)} />
+                                {job.error_class ? (
+                                  <div className='rounded-md border border-red-500/40 bg-red-500/5 px-3 py-2'>
+                                    <p className='text-destructive text-sm'>
+                                      {errorText(job)}
+                                    </p>
+                                    <p className='text-muted-foreground font-mono text-xs'>
+                                      {job.error_class}
+                                    </p>
+                                  </div>
+                                ) : null}
+                                <dl className='text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1 text-xs md:grid-cols-4'>
+                                  <div>
+                                    <dt className='font-medium'>
+                                      {t('SMS688 batch ID')}
+                                    </dt>
+                                    <dd className='font-mono'>
+                                      {job.sms688_batch_id || '—'}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className='font-medium'>{t('Stage')}</dt>
+                                    <dd className='font-mono'>
+                                      {job.stage || '—'}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className='font-medium'>
+                                      {t('Started at')}
+                                    </dt>
+                                    <dd>{formatTime(job.created_at)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt className='font-medium'>
+                                      {t('Last activity')}
+                                    </dt>
+                                    <dd>{formatTime(job.updated_at)}</dd>
+                                  </div>
+                                </dl>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
