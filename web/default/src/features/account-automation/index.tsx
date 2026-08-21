@@ -17,7 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  KeyRound,
+  Mail,
+  Send,
+  ShieldCheck,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -33,18 +40,19 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import {
   NativeSelect,
   NativeSelectOption,
 } from '@/components/ui/native-select'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
 import { DetailStepper, MiniStepper } from './stepper'
 import {
   deriveSteps,
   ERROR_MESSAGE_KEYS,
   STATUS_LABEL_KEYS,
+  STEP_LABEL_KEYS,
 } from './steps'
 
 const PAGE_SIZE = 20
@@ -57,6 +65,32 @@ const MODE_PLACEHOLDERS: Record<AccountMode, string> = {
   microsoft: 'user@example.com----password',
   totp: 'user@example.com----password----TOTP_SECRET',
 }
+
+const MODE_ICONS: Record<AccountMode, typeof Mail> = {
+  microsoft: Mail,
+  totp: ShieldCheck,
+}
+
+/** Credential format tokens shown as chips below the account input. */
+const FORMAT_SEGMENTS: Record<
+  AccountMode,
+  Array<{ token: string; optional?: boolean }>
+> = {
+  microsoft: [
+    { token: 'email' },
+    { token: 'password' },
+    { token: 'client_id', optional: true },
+    { token: 'refresh_token', optional: true },
+  ],
+  totp: [
+    { token: 'email' },
+    { token: 'password' },
+    { token: 'TOTP_SECRET' },
+  ],
+}
+
+const MICRO_LABEL =
+  'text-muted-foreground text-[11px] font-medium tracking-wider uppercase'
 
 const modeLabel = (mode: string): string =>
   mode === 'microsoft' ? 'Microsoft' : mode === 'totp' ? 'TOTP' : mode
@@ -208,29 +242,82 @@ function AccountAutomationContent() {
               {t('One account = one job; history is kept in the database')}
             </CardDescription>
           </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='grid gap-4 md:grid-cols-2'>
-              <div className='space-y-2'>
-                <label className='text-sm font-medium' htmlFor='account-mode'>
-                  {t('Account type')}
-                </label>
-                <NativeSelect
-                  id='account-mode'
-                  value={accountMode}
-                  onChange={(event) =>
-                    setAccountMode(event.target.value as AccountMode)
-                  }
-                  className='w-full'
-                >
-                  {ACCOUNT_MODES.map((mode) => (
-                    <NativeSelectOption key={mode} value={mode}>
-                      {t(modeLabel(mode))}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+          <CardContent className='space-y-5'>
+            <div
+              role='radiogroup'
+              aria-label={t('Account type')}
+              className='bg-muted/60 inline-flex w-full gap-0.5 rounded-lg p-0.5 sm:w-fit'
+            >
+              {ACCOUNT_MODES.map((mode) => {
+                const Icon = MODE_ICONS[mode]
+                const active = accountMode === mode
+                return (
+                  <button
+                    key={mode}
+                    type='button'
+                    role='radio'
+                    aria-checked={active}
+                    onClick={() => setAccountMode(mode)}
+                    className={cn(
+                      'flex flex-1 items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-all sm:flex-none',
+                      active
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        'h-4 w-4',
+                        active ? 'text-primary' : 'text-muted-foreground/70'
+                      )}
+                    />
+                    {t(modeLabel(mode))}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className='space-y-2'>
+              <label className={MICRO_LABEL} htmlFor='account-text'>
+                {t('Account')}
+              </label>
+              <div className='relative'>
+                <KeyRound className='pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground/60' />
+                <Input
+                  id='account-text'
+                  value={accountText}
+                  onChange={(event) => setAccountText(event.target.value)}
+                  placeholder={MODE_PLACEHOLDERS[accountMode]}
+                  spellCheck={false}
+                  autoComplete='off'
+                  className='h-11 pr-3 pl-9 font-mono text-sm'
+                />
               </div>
+              <div className='flex flex-wrap items-center gap-1 leading-none'>
+                {FORMAT_SEGMENTS[accountMode].map((segment, index) => (
+                  <Fragment key={segment.token}>
+                    {index > 0 ? (
+                      <span className='font-mono text-[11px] text-muted-foreground/50'>
+                        ----
+                      </span>
+                    ) : null}
+                    <span
+                      className={cn(
+                        'bg-muted text-muted-foreground rounded px-1.5 py-1 font-mono text-[11px]',
+                        segment.optional &&
+                          'border-border bg-transparent border-dashed opacity-60'
+                      )}
+                    >
+                      {segment.token}
+                    </span>
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+
+            <div className='grid gap-5 sm:grid-cols-[1fr_auto] sm:items-end'>
               <div className='space-y-2'>
-                <label className='text-sm font-medium' htmlFor='account-channel'>
+                <label className={MICRO_LABEL} htmlFor='account-channel'>
                   {t('Target channel')}
                 </label>
                 <NativeSelect
@@ -241,7 +328,7 @@ function AccountAutomationContent() {
                       event.target.value === '' ? '' : Number(event.target.value)
                     )
                   }
-                  className='w-full'
+                  className='h-11 w-full'
                 >
                   {channels.length === 0 ? (
                     <NativeSelectOption value=''>
@@ -259,45 +346,50 @@ function AccountAutomationContent() {
                   )}
                 </NativeSelect>
               </div>
-            </div>
-            <div className='space-y-2'>
-              <label className='text-sm font-medium' htmlFor='account-text'>
-                {t('Account')}
-              </label>
-              <Input
-                id='account-text'
-                value={accountText}
-                onChange={(event) => setAccountText(event.target.value)}
-                placeholder={MODE_PLACEHOLDERS[accountMode]}
-                spellCheck={false}
-                autoComplete='off'
-              />
-              <p className='text-muted-foreground text-xs'>
-                {accountMode === 'microsoft'
-                  ? t('Format: email----password (or email----password----client_id----refresh_token)')
-                  : t('Format: email----password----TOTP_SECRET')}
-              </p>
-            </div>
-            <div className='flex items-center justify-between'>
-              <label className='flex items-center gap-2 text-sm'>
-                <Checkbox
+              <label className='text-muted-foreground flex cursor-pointer items-center gap-2.5 pb-2.5 text-sm font-normal select-none'>
+                <Switch
                   checked={bindFree}
                   onCheckedChange={(checked) => setBindFree(checked === true)}
                 />
                 {t('Bind free plan')}
               </label>
-              <Button
-                onClick={() => void submit()}
-                disabled={
-                  submitting ||
-                  accountText.trim() === '' ||
-                  channelId === '' ||
-                  channels.length === 0
-                }
-              >
-                {submitting ? <Spinner className='h-4 w-4' /> : null}
-                {t('Submit')}
-              </Button>
+            </div>
+
+            <Button
+              onClick={() => void submit()}
+              disabled={
+                submitting ||
+                accountText.trim() === '' ||
+                channelId === '' ||
+                channels.length === 0
+              }
+              className='h-11 w-full gap-2 text-[15px] font-semibold'
+            >
+              {submitting ? (
+                <Spinner className='h-4 w-4' />
+              ) : (
+                <Send className='h-4 w-4' />
+              )}
+              {submitting ? t('Submitting') : t('Submit')}
+            </Button>
+
+            <div className='border-t pt-4'>
+              <div className='text-muted-foreground flex flex-wrap items-center gap-x-1 gap-y-1 text-[11px]'>
+                <span className='mr-1 font-medium tracking-wider uppercase'>
+                  {t('Pipeline')}
+                </span>
+                {STEP_LABEL_KEYS.map((labelKey, index) => (
+                  <Fragment key={labelKey}>
+                    {index > 0 ? (
+                      <ChevronRight className='h-3 w-3 text-muted-foreground/40' />
+                    ) : null}
+                    <span>{t(labelKey)}</span>
+                  </Fragment>
+                ))}
+              </div>
+              <p className='text-muted-foreground/70 mt-1.5 text-xs'>
+                {t('One submission runs five automated steps')}
+              </p>
             </div>
           </CardContent>
         </Card>
